@@ -19,15 +19,18 @@ var port = normalizePort(process.env.PORT || '3000');
  * Create HTTP server.
  */
 
+var sync = require('../src/models/sync');
 var server = http.createServer(app.callback());
 
 /**
  * Listen on provided port, on all network interfaces.
  */
 
-server.listen(port);
-server.on('error', onError);
-server.on('listening', onListening);
+sync().then(() => {
+  server.listen(port);
+  server.on('error', onError);
+  server.on('listening', onListening);
+});
 
 /**
  * Normalize a port into a number, string, or false.
