@@ -25,6 +25,8 @@ if (RUNTIME_TYPE && RUNTIME_TYPE === 'local-docker') {
   closeContainer = async () => {
     console.log('本地不执行')
   }
+} else {
+  closeContainer = async () => {}
 }
 
 const activeAgents = new Map();
