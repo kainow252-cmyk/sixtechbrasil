@@ -1,0 +1,13 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+authors:
+- family-names: "hexdocom"
+  given-names: ""
+title: "lemonai"
+version: 0.5.1
+doi: 10.5281/zenodo.1234
+date-released: 2025-11-17
+url: "https://github.com/hexdocom/lemonai"
+repository-code: "https://github.com/hexdocom/lemonai"
+abstract: "Lemon AI is a full-stack open-source self-evolving general AI agent framework that runs locally, enabling autonomous task execution, code generation, and data analysis."
+license: "Apache-2.0"
