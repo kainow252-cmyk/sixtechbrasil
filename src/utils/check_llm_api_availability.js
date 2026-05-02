@@ -1,40 +1,93 @@
-async function checkLlmApiAvailability(baseUrl, apiKey='', model) {
-  if (!baseUrl) {
+async function checkLlmApiAvailability(baseUrl, apiKey = '', model, type = 'openai', apiVersion = '') {
+  if (!baseUrl && !['gemini', 'claude'].includes(type.toLowerCase())) {
     return { status: false, message: 'Base URL is required.' };
   }
-  const api_url = baseUrl + '/chat/completions'
+
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 8000);
+  const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+  let apiUrl = '';
+  let headers = { 'Content-Type': 'application/json' };
+  let body = {};
 
   try {
-    const response = await fetch(api_url, {
+    const providerType = (type || 'openai').toLowerCase();
+
+    switch (providerType) {
+      case 'azure':
+        apiUrl = `${baseUrl.replace(/\/$/, '')}/openai/deployments/${model}/chat/completions?api-version=${apiVersion || '2023-05-15'}`;
+        headers['api-key'] = apiKey;
+        body = {
+          messages: [{ role: "user", content: "hello" }],
+          max_tokens: 5
+        };
+        break;
+
+      case 'gemini':
+        apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+        body = {
+          contents: [{ parts: [{ text: "hello" }] }]
+        };
+        break;
+
+      case 'claude':
+        apiUrl = 'https://api.anthropic.com/v1/messages';
+        headers['x-api-key'] = apiKey;
+        headers['anthropic-version'] = '2023-06-01';
+        body = {
+          model: model,
+          messages: [{ role: "user", content: "hello" }],
+          max_tokens: 5
+        };
+        break;
+
+      case 'openrouter':
+        apiUrl = 'https://openrouter.ai/api/v1/chat/completions';
+        headers['Authorization'] = `Bearer ${apiKey}`;
+        body = {
+          model: model,
+          messages: [{ role: "user", content: "hello" }],
+          max_tokens: 5
+        };
+        break;
+
+      default: // OpenAI compatible
+        apiUrl = `${baseUrl.replace(/\/$/, '')}/chat/completions`;
+        headers['Authorization'] = `Bearer ${apiKey}`;
+        body = {
+          model: model,
+          messages: [{ role: "user", content: "hello" }],
+          max_tokens: 5,
+          enable_thinking: false
+        };
+    }
+
+    const response = await fetch(apiUrl, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}` // API key is usually passed as Bearer
-      },
-      body: JSON.stringify({
-        // This is a simple example request body for the OpenAI Chat Completion API
-        // **Important: Adjust according to your actual LLM API documentation**
-        model: model, // Replace with the model name you are testing
-        messages: [{
-          role: "user",
-          content: "hello" // A simple request content for testing
-        }],
-        max_tokens: 5, // Send a very small request to minimize resource usage and response time
-        enable_thinking:false
-      }),
+      headers,
+      body: JSON.stringify(body),
       signal: controller.signal
     });
 
-    if (response.ok) { // HTTP status code in the 200-299 range
+    clearTimeout(timeoutId);
+
+    if (response.ok) {
       const data = await response.json();
-      // Further check the response data, e.g., whether expected fields or error info exist
-      // Different LLM API responses may vary, adjust as needed
-      if (data && data.choices && data.choices.length > 0) {
+      
+      // Validation logic per provider
+      let success = false;
+      if (providerType === 'gemini') {
+        success = !!(data && data.candidates && data.candidates.length > 0);
+      } else if (providerType === 'claude') {
+        success = !!(data && data.content && data.content.length > 0);
+      } else {
+        success = !!(data && data.choices && data.choices.length > 0);
+      }
+
+      if (success) {
         return { status: true, message: 'LLM API call succeeded.' };
       } else {
-        return { status: false, message: 'LLM API call succeeded, but response data is not as expected.' };
+        return { status: false, message: 'LLM API call succeeded, but response data is not as expected.', data };
       }
     } else {
       const errorText = await response.text();
@@ -42,9 +95,9 @@ async function checkLlmApiAvailability(baseUrl, apiKey='', model) {
     }
   } catch (error) {
     if (error.name === 'AbortError') {
-      return { status: false, message: `LLM API call timed out: ${error.message}` };
+      return { status: false, message: `LLM API call timed out` };
     } else {
-      return { status: false, message: `Network or other error occurred during LLM API call: ${error.message}` };
+      return { status: false, message: `Network or other error: ${error.message}` };
     }
   }
 }
