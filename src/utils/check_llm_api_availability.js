@@ -57,8 +57,7 @@ async function checkLlmApiAvailability(baseUrl, apiKey = '', model, type = 'open
         body = {
           model: model,
           messages: [{ role: "user", content: "hello" }],
-          max_tokens: 5,
-          enable_thinking: false
+          max_tokens: 5
         };
     }
 
