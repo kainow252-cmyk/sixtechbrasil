@@ -217,6 +217,12 @@ router.delete("/:platform_id", async ({ state, params, response }) => {
  *               model:
  *                 type: string
  *                 description: Model
+ *               provider_type:
+ *                 type: string
+ *                 description: Provider Type (openai, azure, gemini, claude, etc.)
+ *               api_version:
+ *                 type: string
+ *                 description: API Version (for Azure)
  *     responses:
  *       200:
  *         description: Successfully checked the API availability
@@ -243,8 +249,8 @@ router.delete("/:platform_id", async ({ state, params, response }) => {
  */
 router.post("/check_api_availability", async ({ request, response }) => {
   const body = request.body || {};
-  const { base_url, api_key, model } = body
-  const res = await checkLlmApiAvailability(base_url, api_key, model)
+  const { base_url, api_key, model, provider_type, api_version } = body
+  const res = await checkLlmApiAvailability(base_url, api_key, model, provider_type, api_version)
   return response.success(res)
 })
 
