@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 
-// ─── TYPES ──────────────────────────────────────────────────────────────────
+// ─── TYPES ───────────────────────────────────────────────────────────────────
 type Bindings = { AI: Ai }
 
 type AgentSource = 'cloudflare' | 'internal' | 'hybrid'
@@ -17,6 +17,8 @@ interface AgentDef {
   internalUrl?: string
   system: string
   category: string
+  capabilities: string[]
+  basedOn?: string
 }
 
 interface RunResult {
@@ -32,7 +34,12 @@ interface RunResult {
   error?: string
 }
 
-// ─── CF WORKERS AI MODELS ───────────────────────────────────────────────────
+interface ChatMessage {
+  role: 'system' | 'user' | 'assistant'
+  content: string
+}
+
+// ─── CF WORKERS AI MODELS ────────────────────────────────────────────────────
 const CF_MODELS = {
   fast:      '@cf/meta/llama-3.2-3b-instruct',
   balanced:  '@cf/meta/llama-3.1-8b-instruct-fp8',
@@ -41,76 +48,106 @@ const CF_MODELS = {
   reason:    '@cf/deepseek-ai/deepseek-r1-distill-qwen-32b',
   kimi:      '@cf/moonshotai/kimi-k2.6',
   gpt:       '@cf/openai/gpt-oss-120b',
-  gemma:     '@cf/google/gemma-2b-it-lora',
+  gemma:     '@cf/google/gemma-3-12b-it',
 }
 
-// ─── INTERNAL ENDPOINTS (from sixtech-workspace backend) ────────────────────
-const INTERNAL_BASE = 'https://api.sixtechbrasil.com.br'
+// ─── INTERNAL ENDPOINTS (sixtech-workspace FastAPI + sixtechworkspace CF) ────
+const INTERNAL_BASE    = 'https://api.sixtechbrasil.com.br'
+const WORKSPACE_CF_URL = 'https://sixtechworkspace.kainow252-cmyk.workers.dev'
 
-// ─── AGENTS REGISTRY ────────────────────────────────────────────────────────
-// Integra agentes do sixtech-workspace/backend/agents/ com fallback para CF AI
+// ─── AGENTS REGISTRY ─────────────────────────────────────────────────────────
+// Fonte: sixtech-workspace/backend/agents/ + sixtechworkspace + agentes nativos CF AI
 const AGENTS: AgentDef[] = [
-  // ── AGENTES INTERNOS DO SIXTECH-WORKSPACE ──
+  // ── AGENTES SIXTECH-WORKSPACE (hybrid: internal FastAPI → CF AI fallback) ──
   {
     id: 'developer',
     name: 'Developer',
     emoji: '💻',
     color: '#F87171',
-    category: 'sixtech-workspace',
+    category: 'SixTech Workspace',
     source: 'hybrid',
     model: CF_MODELS.coder,
     internalUrl: `${INTERNAL_BASE}/agents/developer`,
-    desc: 'Arquiteto de software sênior — código production-ready em qualquer linguagem',
-    system: `Você é um arquiteto de software sênior da SixTech Brasil.
-Seu objetivo é gerar código production-ready, limpo e documentado.
-Sempre explique a solução, inclua exemplos e boas práticas.
-Responda SEMPRE em português brasileiro. Use markdown com blocos de código.`
+    basedOn: 'sixtech-workspace + OpenHands',
+    capabilities: ['Código production-ready', 'APIs REST/GraphQL', 'Docker & DevOps', 'Banco de dados', 'Integrações'],
+    desc: 'Arquiteto de software sênior — Qwen2.5 Coder 32B + backend interno OpenHands',
+    system: `Você é um arquiteto de software sênior da SixTech Brasil (baseado em OpenHands).
+Seu objetivo: gerar código production-ready, limpo, documentado e testável.
+Para cada solução:
+1. Explique a arquitetura escolhida
+2. Forneça o código completo com comentários
+3. Inclua exemplos de uso
+4. Liste dependências e requisitos
+5. Adicione casos de teste básicos
+Tecnologias dominadas: Python, TypeScript, Go, Rust, React, Next.js, FastAPI, Docker, Kubernetes, PostgreSQL, Redis.
+Responda SEMPRE em português brasileiro. Use markdown com blocos de código bem formatados.`
   },
   {
     id: 'research',
     name: 'Pesquisador',
     emoji: '🔍',
     color: '#6C63FF',
-    category: 'sixtech-workspace',
+    category: 'SixTech Workspace',
     source: 'hybrid',
-    model: CF_MODELS.balanced,
+    model: CF_MODELS.powerful,
     internalUrl: `${INTERNAL_BASE}/agents/research`,
-    desc: 'Pesquisa de mercado, análise competitiva e investigação técnica aprofundada',
+    basedOn: 'sixtech-workspace',
+    capabilities: ['Pesquisa de mercado', 'Análise competitiva', 'Inteligência técnica', 'Verificação de fatos', 'Tendências'],
+    desc: 'Pesquisa profunda — Llama 3.3 70B + backend interno de inteligência',
     system: `Você é um agente especialista em pesquisa e inteligência de mercado da SixTech Brasil.
-Identifique fatos, dados, tendências e contexto relevante.
-Estruture as informações de forma clara e hierárquica.
-Cite fontes e diferencie fatos de inferências.
-Responda SEMPRE em português brasileiro. Use markdown com estrutura bem organizada.`
+Processo de pesquisa:
+1. Identifique o tema central e subtemas relevantes
+2. Apresente dados e fatos verificáveis
+3. Analise tendências e padrões
+4. Compare players e soluções do mercado
+5. Conclua com insights acionáveis
+Estruture sempre: Resumo Executivo → Análise Detalhada → Dados & Métricas → Tendências → Conclusões.
+Cite quando possível: "Segundo [fonte], ..." — diferencie fatos de inferências.
+Responda SEMPRE em português brasileiro.`
   },
   {
     id: 'legal',
     name: 'Jurídico',
     emoji: '⚖️',
     color: '#F59E0B',
-    category: 'sixtech-workspace',
+    category: 'SixTech Workspace',
     source: 'hybrid',
     model: CF_MODELS.powerful,
     internalUrl: `${INTERNAL_BASE}/agents/legal`,
-    desc: 'Contratos, NDAs, compliance, análise legal e pesquisa regulatória',
-    system: `Você é um especialista jurídico da SixTech Brasil com foco em direito digital, contratos e compliance.
-Analise contratos, NDAs, termos de uso e questões regulatórias.
-Sempre inclua disclaimer: "Esta análise é informativa e não substitui consultoria jurídica profissional."
-Responda SEMPRE em português brasileiro com linguagem técnica mas acessível.`
+    basedOn: 'sixtech-workspace',
+    capabilities: ['Contratos & NDAs', 'LGPD & Compliance', 'Propriedade intelectual', 'Termos de uso', 'Due diligence'],
+    desc: 'Especialista jurídico — direito digital, contratos e compliance brasileiro',
+    system: `Você é um especialista jurídico da SixTech Brasil focado em direito digital e tech.
+Áreas de atuação:
+- Contratos de software, SaaS e licenças
+- NDAs e acordos de confidencialidade
+- LGPD, GDPR e compliance de dados
+- Propriedade intelectual e direitos autorais
+- Termos de uso e políticas de privacidade
+Sempre inclua: ⚠️ DISCLAIMER: Esta análise é informativa e educacional. Para situações reais, consulte um advogado habilitado.
+Responda SEMPRE em português brasileiro com linguagem técnica-jurídica acessível.`
   },
   {
     id: 'designer',
     name: 'Designer',
     emoji: '🎨',
     color: '#EC4899',
-    category: 'sixtech-workspace',
+    category: 'SixTech Workspace',
     source: 'hybrid',
     model: CF_MODELS.powerful,
     internalUrl: `${INTERNAL_BASE}/agents/designer`,
-    desc: 'UI/UX design, branding, logos e materiais de marketing',
-    system: `Você é um designer criativo sênior da SixTech Brasil especializado em UI/UX e branding.
-Crie conceitos de design, paletas de cores, diretrizes de marca e especificações visuais.
-Descreva layouts em HTML/CSS quando solicitado.
-Forneça guias de estilo e decisões de design justificadas.
+    basedOn: 'sixtech-workspace',
+    capabilities: ['UI/UX Design', 'Branding & identidade', 'Sistemas de design', 'HTML/CSS', 'Acessibilidade'],
+    desc: 'Designer criativo sênior — UI/UX, branding e especificações visuais',
+    system: `Você é um designer criativo sênior da SixTech Brasil especializado em UI/UX e branding digital.
+Processo criativo:
+1. Entenda o contexto, público-alvo e objetivos
+2. Proponha direção visual com justificativa
+3. Defina paleta de cores (hex), tipografia e espaçamentos
+4. Descreva componentes e layouts em detalhes
+5. Forneça HTML/CSS quando solicitado
+6. Inclua considerações de acessibilidade (WCAG)
+Estilos dominados: Minimalista, Material Design, Glassmorphism, Neumorphism, Dark mode.
 Responda SEMPRE em português brasileiro com linguagem criativa e técnica.`
   },
   {
@@ -118,1186 +155,1133 @@ Responda SEMPRE em português brasileiro com linguagem criativa e técnica.`
     name: 'Documentos',
     emoji: '📄',
     color: '#14B8A6',
-    category: 'sixtech-workspace',
+    category: 'SixTech Workspace',
     source: 'hybrid',
     model: CF_MODELS.balanced,
     internalUrl: `${INTERNAL_BASE}/agents/documents`,
-    desc: 'Relatórios, documentação técnica, PDFs e planilhas',
+    basedOn: 'sixtech-workspace',
+    capabilities: ['Relatórios técnicos', 'Propostas comerciais', 'Documentação de API', 'Apresentações', 'Specs técnicas'],
+    desc: 'Especialista em documentação — relatórios, specs técnicas e propostas',
     system: `Você é um especialista em documentação técnica e criação de documentos da SixTech Brasil.
-Crie relatórios estruturados, documentação técnica, planos de projeto e especificações.
-Use formatação clara com sumário executivo, seções bem definidas e conclusões.
-Responda SEMPRE em português brasileiro com linguagem formal e precisa.`
+Tipos de documentos que cria:
+- Relatórios técnicos e executivos
+- Especificações de produto (PRD)
+- Documentação de API (OpenAPI/Swagger style)
+- Propostas comerciais e pitches
+- Planos de projeto e roadmaps
+- Manuais e guias de usuário
+Estrutura padrão: Sumário Executivo → Contexto → Desenvolvimento → Resultados/Especificações → Conclusão → Próximos Passos.
+Responda SEMPRE em português brasileiro com linguagem formal, clara e precisa.`
   },
-  // ── AGENTES NATIVOS CLOUDFLARE AI ──
+  // ── AGENTES NATIVOS CLOUDFLARE AI ──────────────────────────────────────────
   {
     id: 'analyst',
     name: 'Analista',
     emoji: '📊',
     color: '#8B5CF6',
-    category: 'cloudflare',
+    category: 'Cloudflare AI',
     source: 'cloudflare',
     model: CF_MODELS.reason,
-    desc: 'Análise profunda com raciocínio avançado — DeepSeek R1 32B',
-    system: `Você é um analista de dados e negócios de elite, powered by DeepSeek R1 (raciocínio avançado).
-Analise profundamente o problema, identifique padrões e gere insights acionáveis.
-Apresente análise SWOT, métricas, KPIs e recomendações estratégicas.
-Use raciocínio passo a passo antes de concluir.
-Responda SEMPRE em português brasileiro com estrutura analítica clara.`
+    basedOn: 'DeepSeek R1 Distill Qwen 32B',
+    capabilities: ['Análise SWOT', 'KPIs & métricas', 'Modelagem financeira', 'Raciocínio lógico', 'Business intelligence'],
+    desc: 'Analista de elite com raciocínio avançado — DeepSeek R1 32B chain-of-thought',
+    system: `Você é um analista de dados e negócios de elite da SixTech Brasil, powered by DeepSeek R1 (raciocínio chain-of-thought).
+Metodologia analítica:
+<think>
+- Decompor o problema em componentes
+- Identificar variáveis-chave e relações causais
+- Testar hipóteses alternativas
+- Validar com dados quando disponíveis
+</think>
+Entregáveis: Análise SWOT, KPIs sugeridos, modelos de decisão, cenários (otimista/realista/pessimista), recomendações priorizadas.
+Seja rigoroso, baseado em evidências. Mostre seu raciocínio passo a passo.
+Responda SEMPRE em português brasileiro com estrutura analítica densa e precisa.`
   },
   {
     id: 'reviewer',
-    name: 'Revisor',
+    name: 'Revisor QA',
     emoji: '🛡️',
     color: '#10B981',
-    category: 'cloudflare',
+    category: 'Cloudflare AI',
     source: 'cloudflare',
     model: CF_MODELS.balanced,
-    desc: 'Revisão crítica, controle de qualidade e scoring do trabalho',
-    system: `Você é um revisor crítico e criterioso da SixTech Brasil.
-Revise o conteúdo recebido, identifique erros, inconsistências e pontos de melhoria.
-Dê uma nota de 0-10 com justificativa.
-Forneça correções específicas e construtivas.
-Responda SEMPRE em português brasileiro. Seja honesto e objetivo.`
+    basedOn: 'Llama 3.1 8B',
+    capabilities: ['Code review', 'Quality assurance', 'Security audit', 'Scoring 0-10', 'Melhorias específicas'],
+    desc: 'Revisor crítico de qualidade — análise rigorosa com scoring e melhorias',
+    system: `Você é o revisor de qualidade (QA Lead) da SixTech Brasil. Analise criticamente qualquer conteúdo recebido.
+Framework de revisão:
+📋 ANÁLISE GERAL: Objetivo, completude, clareza
+⚠️ PROBLEMAS ENCONTRADOS: Liste todos com severidade (crítico/alto/médio/baixo)
+✅ PONTOS POSITIVOS: O que está bem feito
+🔧 MELHORIAS ESPECÍFICAS: Sugestões concretas com exemplos
+🔒 SEGURANÇA (se código): Vulnerabilidades, boas práticas
+📊 SCORE FINAL: X/10 com justificativa clara
+Seja honesto, direto e construtivo. Não suavize problemas sérios.
+Responda SEMPRE em português brasileiro.`
+  },
+  {
+    id: 'chat-assistant',
+    name: 'Assistente',
+    emoji: '💬',
+    color: '#06B6D4',
+    category: 'Cloudflare AI',
+    source: 'cloudflare',
+    model: CF_MODELS.balanced,
+    basedOn: 'Llama 3.1 8B + SSE Streaming',
+    capabilities: ['Chat geral', 'Streaming em tempo real', 'Contexto de conversa', 'Múltiplos idiomas', 'Respostas rápidas'],
+    desc: 'Assistente conversacional com streaming em tempo real — baseado no sixtechworkspace',
+    system: `Você é o assistente inteligente da SixTech Brasil, empresa líder em soluções de IA no Brasil.
+Seja útil, amigável e direto. Responda em português brasileiro por padrão.
+Se o usuário falar em inglês, responda em inglês.
+Para perguntas técnicas: seja preciso e detalhado.
+Para perguntas gerais: seja conciso e claro.
+Você representa os valores da SixTech: inovação, excelência técnica e foco no cliente.`
   },
   {
     id: 'orchestrator',
-    name: 'Orquestrador',
+    name: 'Super Orquestrador',
     emoji: '🎯',
     color: '#22D3EE',
-    category: 'cloudflare',
+    category: 'Cloudflare AI',
     source: 'cloudflare',
     model: CF_MODELS.kimi,
-    desc: 'Super agente orquestrador — Kimi K2.6 (1 trilhão de parâmetros)',
-    system: `Você é o Super Agente Orquestrador da SixTech Brasil, powered by Kimi K2.6 (1T parâmetros).
-Sua missão: analisar as saídas de todos os agentes especializados e criar a síntese definitiva.
-Identifique os melhores pontos de cada contribuição.
-Elimine redundâncias, resolva conflitos e construa resposta coesa e completa.
-Aja como CEO de uma equipe de especialistas — tome decisões, priorize e entregue o resultado final.
+    basedOn: 'Kimi K2.6 (1T parâmetros) + SuperAgentOrchestrator',
+    capabilities: ['Roteamento inteligente', 'Síntese de múltiplos agentes', 'Planejamento complexo', 'Delegação de tarefas', 'Consolidação final'],
+    desc: 'Super Agente Orquestrador — Kimi K2.6 1T params, CEO da equipe de agentes',
+    system: `Você é o Super Agente Orquestrador da SixTech Brasil, powered by Kimi K2.6 (1 trilhão de parâmetros).
+Baseado no SuperAgentOrchestrator do sixtech-workspace com capacidades expandidas.
+
+Missão de orquestração:
+1. ANALISAR a solicitação e identificar domínios necessários
+2. PLANEJAR quais agentes devem atuar e em qual ordem
+3. SINTETIZAR as saídas dos agentes em resposta coesa
+4. DECIDIR como CEO: prioridades, trade-offs e recomendação final
+
+Roteamento inteligente:
+- "código/api/sistema" → Developer Agent
+- "contrato/nda/legal" → Jurídico Agent  
+- "logo/design/ui/ux" → Designer Agent
+- "pesquisa/mercado/análise" → Pesquisador + Analista
+- "relatório/documento" → Documentos Agent
+- "revisar/qualidade" → Revisor QA
+
+Ao sintetizar: elimine redundâncias, resolva conflitos, construa narrativa coesa.
 Responda SEMPRE em português brasileiro. Use markdown rico e estruturado.`
   }
 ]
 
-const AGENT_MAP = Object.fromEntries(AGENTS.map(a => [a.id, a]))
-
-// ─── APP ─────────────────────────────────────────────────────────────────────
-const app = new Hono<{ Bindings: Bindings }>()
-app.use('/api/*', cors())
-
-// ─── HELPER: call CF Workers AI ──────────────────────────────────────────────
-async function callCFAI(
-  ai: Ai,
-  model: string,
-  system: string,
-  user: string,
-  maxTokens = 1024
-): Promise<string> {
-  const result = await ai.run(model as any, {
-    messages: [
-      { role: 'system', content: system },
-      { role: 'user',   content: user }
-    ],
-    max_tokens: maxTokens,
-  }) as { response?: string }
-  return result?.response?.trim() ?? '(sem resposta do modelo)'
-}
-
-// ─── HELPER: call internal backend (sixtech-workspace FastAPI) ───────────────
-async function callInternal(url: string, task: string, timeoutMs = 8000): Promise<string | null> {
+// ─── HELPERS ─────────────────────────────────────────────────────────────────
+async function callInternal(url: string, task: string): Promise<string | null> {
   try {
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), timeoutMs)
-
+    const ctrl = new AbortController()
+    const timer = setTimeout(() => ctrl.abort(), 8000)
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ task }),
-      signal: controller.signal
+      body: JSON.stringify({ task, message: task }),
+      signal: ctrl.signal
     })
-
     clearTimeout(timer)
-
     if (!res.ok) return null
-
-    const data = await res.json() as any
-    return (data?.result || data?.response || data?.output || null) as string | null
+    const data: any = await res.json()
+    return data.result || data.response || data.output || null
   } catch {
     return null
   }
 }
 
-// ─── HELPER: run single agent with fallback logic ────────────────────────────
-async function runAgent(
-  agent: AgentDef,
+async function callCFAI(
+  ai: Ai,
+  model: string,
+  system: string,
   userMsg: string,
-  ai: Ai
-): Promise<RunResult> {
+  maxTokens = 1200
+): Promise<string> {
+  const messages: ChatMessage[] = [
+    { role: 'system', content: system },
+    { role: 'user',   content: userMsg }
+  ]
+  const resp = await (ai as any).run(model, { messages, max_tokens: maxTokens })
+  if (resp && typeof resp === 'object' && 'response' in resp) return (resp as any).response || ''
+  return String(resp || '')
+}
+
+async function runAgent(agent: AgentDef, userMsg: string, ai: Ai): Promise<RunResult> {
   const start = Date.now()
   let response = ''
   let usedFallback = false
-  let error: string | undefined
+  let source: AgentSource = agent.source
 
-  // 1. Try internal backend first (if hybrid source)
-  if (agent.source === 'hybrid' && agent.internalUrl) {
-    const internalResult = await callInternal(agent.internalUrl, userMsg)
-    if (internalResult) {
-      response = internalResult
-      return {
-        agentId: agent.id, name: agent.name,
-        emoji: agent.emoji, color: agent.color,
-        model: `internal → ${agent.internalUrl}`,
-        source: 'internal', usedFallback: false,
-        response, duration: Date.now() - start
-      }
-    }
-    // Internal failed → fallback to CF AI
-    usedFallback = true
-  }
-
-  // 2. Cloudflare Workers AI
   try {
-    response = await callCFAI(ai, agent.model, agent.system, userMsg, 1200)
+    if (agent.source === 'hybrid' && agent.internalUrl) {
+      const internal = await callInternal(agent.internalUrl, userMsg)
+      if (internal) {
+        response = internal
+        source = 'internal'
+        usedFallback = false
+      } else {
+        response = await callCFAI(ai, agent.model, agent.system, userMsg, 1500)
+        source = 'cloudflare'
+        usedFallback = true
+      }
+    } else {
+      response = await callCFAI(ai, agent.model, agent.system, userMsg, 1500)
+      source = 'cloudflare'
+      usedFallback = false
+    }
   } catch (err: any) {
-    error = err?.message ?? 'Erro desconhecido'
-    response = `❌ Erro: ${error}`
+    response = `❌ Erro: ${err?.message || 'falha inesperada'}`
   }
 
   return {
-    agentId: agent.id, name: agent.name,
-    emoji: agent.emoji, color: agent.color,
-    model: usedFallback ? `${agent.model} (fallback CF)` : agent.model,
-    source: usedFallback ? 'cloudflare' : agent.source,
-    usedFallback, response, duration: Date.now() - start, error
+    agentId: agent.id,
+    name: agent.name,
+    emoji: agent.emoji,
+    color: agent.color,
+    model: agent.model,
+    source,
+    usedFallback,
+    response,
+    duration: Date.now() - start
   }
 }
 
-// ─── API ROUTES ───────────────────────────────────────────────────────────────
+// Routing inteligente — baseado no SuperAgentOrchestrator do sixtech-workspace
+function smartRoute(task: string): string[] {
+  const t = task.toLowerCase()
+  const agents: string[] = []
 
-// GET /api/agents — list all agents
+  if (/código|code|api|sistema|função|script|bug|deploy|docker|sql|banco|database|programar|desenvolver|criar.*app/.test(t))
+    agents.push('developer')
+  if (/contrato|nda|legal|jurídico|lgpd|compliance|cláusula|acordo|lei|direito|privacy/.test(t))
+    agents.push('legal')
+  if (/design|logo|ui|ux|interface|layout|cor|paleta|branding|wireframe|figma|css|visual/.test(t))
+    agents.push('designer')
+  if (/pesquis|research|mercado|concorrent|trend|análise|dados|market|investigar|buscar/.test(t))
+    agents.push('research')
+  if (/relatório|documento|report|proposta|spec|documentaç|apresent|manual|readme|word|pdf/.test(t))
+    agents.push('documents')
+  if (/analise|analisa|kpi|métrica|swot|negócio|estratégia|financeiro|projeção|cenário/.test(t))
+    agents.push('analyst')
+  if (/revisar|review|qualidade|verificar|corrigir|melhorar|audit|checar|validar/.test(t))
+    agents.push('reviewer')
+
+  if (agents.length === 0) agents.push('orchestrator')
+  if (agents.length > 1) agents.push('orchestrator')
+  return [...new Set(agents)]
+}
+
+// ─── HONO APP ─────────────────────────────────────────────────────────────────
+const app = new Hono<{ Bindings: Bindings }>()
+app.use('*', cors())
+
+// ── GET /api/agents ────────────────────────────────────────────────────────
 app.get('/api/agents', (c) => {
   return c.json({
-    agents: AGENTS.map(a => ({
-      id: a.id, name: a.name, emoji: a.emoji,
-      color: a.color, desc: a.desc, source: a.source,
-      model: a.model, category: a.category
-    })),
     total: AGENTS.length,
-    categories: {
-      'sixtech-workspace': AGENTS.filter(a => a.category === 'sixtech-workspace').length,
-      'cloudflare': AGENTS.filter(a => a.category === 'cloudflare').length
+    models: Object.keys(CF_MODELS).length,
+    repos: ['sixtech-workspace', 'sixtechworkspace', 'kndev-IA', 'sixtechbrasil'],
+    agents: AGENTS.map(a => ({
+      id: a.id, name: a.name, emoji: a.emoji, color: a.color,
+      desc: a.desc, source: a.source, model: a.model,
+      category: a.category, capabilities: a.capabilities,
+      basedOn: a.basedOn, internalUrl: a.internalUrl
+    }))
+  })
+})
+
+// ── POST /api/agent/:id ────────────────────────────────────────────────────
+app.post('/api/agent/:id', async (c) => {
+  const agent = AGENTS.find(a => a.id === c.req.param('id'))
+  if (!agent) return c.json({ error: 'Agente não encontrado' }, 404)
+  const { message, task } = await c.req.json()
+  const result = await runAgent(agent, message || task || '', c.env.AI)
+  return c.json(result)
+})
+
+// ── POST /api/orchestrate ─────────────────────────────────────────────────
+app.post('/api/orchestrate', async (c) => {
+  const { task, message } = await c.req.json()
+  const input = task || message || ''
+  if (!input) return c.json({ error: 'task obrigatório' }, 400)
+
+  const agentIds = smartRoute(input)
+  const agents = agentIds.map(id => AGENTS.find(a => a.id === id)!).filter(Boolean)
+
+  const results: RunResult[] = []
+  for (const agent of agents) {
+    const taskForAgent = agent.id === 'orchestrator' && results.length > 0
+      ? `Tarefa original: "${input}"\n\nResultados dos agentes especializados:\n${results.map(r => `## ${r.emoji} ${r.name}\n${r.response}`).join('\n\n')}\n\nSintetize e entregue o resultado final consolidado.`
+      : input
+    results.push(await runAgent(agent, taskForAgent, c.env.AI))
+  }
+
+  return c.json({
+    task: input,
+    agentsUsed: agentIds,
+    results,
+    summary: results[results.length - 1]?.response || ''
+  })
+})
+
+// ── POST /api/pipeline ────────────────────────────────────────────────────
+app.post('/api/pipeline', async (c) => {
+  const { task, agentIds } = await c.req.json()
+  if (!task || !agentIds?.length) return c.json({ error: 'task e agentIds obrigatórios' }, 400)
+
+  const agents = (agentIds as string[]).map(id => AGENTS.find(a => a.id === id)!).filter(Boolean)
+  const results: RunResult[] = []
+  let ctx = task
+
+  for (const agent of agents) {
+    const isLast = agent === agents[agents.length - 1]
+    const input = results.length === 0 ? task
+      : agent.id === 'orchestrator' && results.length > 0
+        ? `Tarefa original: "${task}"\n\n${results.map(r => `## ${r.emoji} ${r.name}\n${r.response}`).join('\n\n')}\n\nSintetize o resultado final.`
+        : `${task}\n\n[Contexto do ${results[results.length-1].name}]:\n${results[results.length-1].response.slice(0, 800)}`
+    const result = await runAgent(agent, input, c.env.AI)
+    results.push(result)
+    ctx = result.response
+  }
+
+  const cfCount  = results.filter(r => r.source === 'cloudflare').length
+  const intCount = results.filter(r => r.source === 'internal').length
+  return c.json({
+    task,
+    steps: results.length,
+    cloudflareSteps: cfCount,
+    internalSteps: intCount,
+    results,
+    final: ctx
+  })
+})
+
+// ── POST /api/chat (streaming SSE — baseado no sixtechworkspace) ──────────
+app.post('/api/chat', async (c) => {
+  const { messages, model } = await c.req.json() as { messages: ChatMessage[], model?: string }
+  const modelId = model || CF_MODELS.balanced
+
+  if (!messages.some(m => m.role === 'system')) {
+    messages.unshift({
+      role: 'system',
+      content: `Você é o assistente inteligente da SixTech Brasil — plataforma multiagente de IA.
+Seja útil, preciso e responda em português brasileiro por padrão.
+Se o usuário falar inglês, responda em inglês.`
+    })
+  }
+
+  const stream = await (c.env.AI as any).run(modelId, {
+    messages,
+    max_tokens: 2048,
+    stream: true
+  })
+
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'Access-Control-Allow-Origin': '*'
     }
   })
 })
 
-// POST /api/agent/:id — run single agent
-app.post('/api/agent/:id', async (c) => {
-  const agentId = c.req.param('id')
-  const agent = AGENT_MAP[agentId]
-  if (!agent) return c.json({ error: 'Agente não encontrado' }, 404)
-
-  const { prompt, context } = await c.req.json<{ prompt: string; context?: string }>()
-  if (!prompt) return c.json({ error: 'Prompt obrigatório' }, 400)
-
-  const userMsg = context
-    ? `CONTEXTO:\n${context}\n\n---\nTAREFA: ${prompt}`
-    : prompt
-
-  const result = await runAgent(agent, userMsg, c.env.AI)
-
-  return c.json({ ...result, timestamp: new Date().toISOString() })
-})
-
-// POST /api/orchestrate — smart routing (like sixtech-workspace /orchestrate)
-app.post('/api/orchestrate', async (c) => {
-  const { task } = await c.req.json<{ task: string }>()
-  if (!task) return c.json({ error: 'task obrigatório' }, 400)
-
-  // Smart routing based on task content
-  const t = task.toLowerCase()
-  let agentId = 'orchestrator'
-
-  if (/(código|code|api|backend|frontend|dev|programar|função|classe|sql|python|javascript|typescript)/i.test(t))
-    agentId = 'developer'
-  else if (/(contrato|nda|legal|jurídico|compliance|cláusula|lei|regulat)/i.test(t))
-    agentId = 'legal'
-  else if (/(logo|design|ui|ux|layout|branding|marca|cor|paleta|visual)/i.test(t))
-    agentId = 'designer'
-  else if (/(relatório|documento|doc|pdf|planilha|documentação)/i.test(t))
-    agentId = 'documents'
-  else if (/(pesquisa|research|mercado|análise|dados|tendência|competi)/i.test(t))
-    agentId = 'research'
-  else if (/(analisa|insight|swot|kpi|metric|estratégia)/i.test(t))
-    agentId = 'analyst'
-
-  const agent = AGENT_MAP[agentId]
-  const result = await runAgent(agent, task, c.env.AI)
-
+// ── GET /api/models ────────────────────────────────────────────────────────
+app.get('/api/models', (c) => {
   return c.json({
-    routed_to: agentId,
-    reasoning: `Tarefa roteada para ${agent.name} baseado no conteúdo`,
-    ...result,
-    timestamp: new Date().toISOString()
+    models: Object.entries(CF_MODELS).map(([key, id]) => ({
+      key, id,
+      label: {
+        fast:     '⚡ Llama 3.2 3B — Rápido',
+        balanced: '⚖️ Llama 3.1 8B — Balanceado',
+        powerful: '💪 Llama 3.3 70B — Poderoso',
+        coder:    '💻 Qwen2.5 Coder 32B — Código',
+        reason:   '🧠 DeepSeek R1 32B — Raciocínio',
+        kimi:     '🎯 Kimi K2.6 1T — Orquestrador',
+        gpt:      '🤖 GPT-OSS 120B — Avançado',
+        gemma:    '💎 Gemma 3 12B — Google'
+      }[key] || key
+    }))
   })
 })
 
-// POST /api/pipeline — run full multi-agent pipeline
-app.post('/api/pipeline', async (c) => {
-  const { prompt, agents: selectedIds } = await c.req.json<{
-    prompt: string; agents?: string[]
-  }>()
-  if (!prompt) return c.json({ error: 'Prompt obrigatório' }, 400)
-
-  const agentList = (selectedIds && selectedIds.length > 0)
-    ? selectedIds.filter(id => AGENT_MAP[id])
-    : ['research', 'developer', 'analyst', 'reviewer', 'orchestrator']
-
-  const results: RunResult[] = []
-  let ctx = ''
-
-  for (const agentId of agentList) {
-    const agent = AGENT_MAP[agentId]
-    if (!agent) continue
-
-    const userMsg = ctx
-      ? `CONTEXTO ACUMULADO DOS AGENTES ANTERIORES:\n${ctx}\n\n---\nTAREFA PRINCIPAL: ${prompt}`
-      : prompt
-
-    const result = await runAgent(agent, userMsg, c.env.AI)
-    results.push(result)
-    ctx += `\n\n=== ${agent.emoji} ${agent.name.toUpperCase()} ===\n${result.response}`
-  }
-
-  const totalMs = results.reduce((s, r) => s + r.duration, 0)
-  const fallbackCount = results.filter(r => r.usedFallback).length
-
+// ── GET /api/status ────────────────────────────────────────────────────────
+app.get('/api/status', (c) => {
   return c.json({
-    prompt,
-    pipeline: agentList,
-    results,
-    stats: {
-      totalAgents: results.length,
-      totalDurationMs: totalMs,
-      fallbackCount,
-      internalCount: results.filter(r => r.source === 'internal').length,
-      cloudflareCount: results.filter(r => r.source === 'cloudflare').length
-    },
-    timestamp: new Date().toISOString()
-  })
-})
-
-// POST /api/chat — direct chat with model selection
-app.post('/api/chat', async (c) => {
-  const { message, model: modelKey, history } = await c.req.json<{
-    message: string; model?: string; history?: Array<{role:string;content:string}>
-  }>()
-  if (!message) return c.json({ error: 'Mensagem obrigatória' }, 400)
-
-  const model = CF_MODELS[(modelKey as keyof typeof CF_MODELS)] ?? CF_MODELS.balanced
-  const msgs: any[] = [
-    { role: 'system', content: 'Você é o assistente SixTech Brasil. Responda em português, seja útil e preciso.' },
-    ...(history ?? []).slice(-10),
-    { role: 'user', content: message }
-  ]
-
-  try {
-    const result = await c.env.AI.run(model as any, {
-      messages: msgs, max_tokens: 1024
-    }) as { response?: string }
-    return c.json({
-      response: result?.response ?? '(sem resposta)',
-      model, timestamp: new Date().toISOString()
-    })
-  } catch (err: any) {
-    return c.json({ error: err?.message ?? 'Erro interno' }, 500)
-  }
-})
-
-// GET /api/status — platform health
-app.get('/api/status', async (c) => {
-  // Quick CF AI health check
-  let cfOk = false
-  try {
-    const r = await c.env.AI.run(CF_MODELS.fast as any, {
-      messages: [{ role: 'user', content: 'hi' }], max_tokens: 5
-    }) as any
-    cfOk = !!r?.response
-  } catch { cfOk = false }
-
-  return c.json({
-    platform: 'SixTech MAS',
-    version: '2.0.0',
     status: 'online',
-    agents: AGENTS.length,
-    providers: {
-      cloudflare_ai: cfOk ? 'healthy' : 'degraded',
-      internal_backend: 'checking',
+    version: '3.0.0',
+    platform: 'SixTech MAS — Multi-Agent System',
+    repos: {
+      'sixtech-workspace': { agents: 5, type: 'Python FastAPI + Ollama', url: INTERNAL_BASE },
+      'sixtechworkspace':  { type: 'Cloudflare Workers AI + SSE', url: WORKSPACE_CF_URL },
+      'kndev-IA':          { type: 'OpenHands + opencode (RAR)', note: 'Integrado ao developer agent' },
+      'sixtechbrasil':     { type: 'CF Pages — plataforma principal', url: 'https://sixtechbrasil.pages.dev' }
     },
-    models_available: Object.keys(CF_MODELS).length,
+    agents: AGENTS.length,
+    models: Object.keys(CF_MODELS).length,
+    features: ['hybrid routing', 'SSE streaming', 'smart orchestration', 'pipeline mode', 'fallback chain'],
     timestamp: new Date().toISOString()
   })
 })
 
-// ─── FRONTEND HTML ────────────────────────────────────────────────────────────
-app.get('/', (c) => c.html(buildHTML()))
-app.get('*', (c) => c.html(buildHTML()))
-
-function buildHTML(): string { return `<!DOCTYPE html>
+// ── GET / — Frontend SPA ──────────────────────────────────────────────────
+app.get('/', (c) => {
+  return c.html(`<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>SixTech MAS 2.0 — Plataforma Multiagente IA</title>
-<meta name="description" content="Sistema de IA Multiagentes SixTech Brasil — Backend interno + Cloudflare Workers AI"/>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🤖</text></svg>"/>
-<link rel="preconnect" href="https://fonts.googleapis.com"/>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.0/css/all.min.css"/>
-<script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SixTech MAS — Multi-Agent System v3.0</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
 <style>
-:root{
-  --bg:#060912;--bg2:#0d1117;--bg3:#161b22;--bg4:#1c2333;--bg5:#21262d;
-  --b:rgba(255,255,255,0.07);--b2:rgba(255,255,255,0.12);
-  --txt:#e6edf3;--mut:#7d8590;--mut2:#6e7681;
-  --p:#6C63FF;--p2:#4F46E5;--c:#22d3ee;--a:#f59e0b;--r:#f87171;--g:#34d399;--v:#a78bfa;
-  --grad:linear-gradient(135deg,#6C63FF 0%,#22d3ee 100%);
-  --grad2:linear-gradient(135deg,#f59e0b 0%,#ef4444 100%);
-}
-*{margin:0;padding:0;box-sizing:border-box;}
-html{scroll-behavior:smooth;}
-body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--txt);min-height:100vh;overflow-x:hidden;}
-
-/* LAYOUT */
-.app{display:grid;grid-template-columns:260px 1fr;grid-template-rows:60px 1fr;height:100vh;overflow:hidden;}
-@media(max-width:860px){.app{grid-template-columns:1fr;}}
-
-/* HEADER */
-header{
-  grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;
-  padding:0 1.25rem;background:rgba(6,9,18,.96);backdrop-filter:blur(16px);
-  border-bottom:1px solid var(--b);position:sticky;top:0;z-index:60;gap:.75rem;
-}
-.logo{
-  font-family:'Space Grotesk',sans-serif;font-size:1.15rem;font-weight:800;
-  background:var(--grad);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
-  display:flex;align-items:center;gap:.45rem;white-space:nowrap;
-}
-.logo i{-webkit-text-fill-color:initial!important;color:var(--p);font-size:1rem;}
-.hbadges{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;}
-.hbadge{
-  display:flex;align-items:center;gap:.35rem;
-  padding:.25rem .65rem;border-radius:999px;font-size:.7rem;font-weight:700;letter-spacing:.03em;
-  white-space:nowrap;
-}
-.hbadge-cf{background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);color:var(--a);}
-.hbadge-int{background:rgba(52,211,153,.08);border:1px solid rgba(52,211,153,.25);color:var(--g);}
-.hbadge-live{background:rgba(108,99,255,.1);border:1px solid rgba(108,99,255,.3);color:var(--v);}
-.sdot{width:6px;height:6px;border-radius:50%;background:currentColor;animation:blink 2s infinite;}
-@keyframes blink{0%,100%{opacity:1;}50%{opacity:.3;}}
-
-/* SIDEBAR */
-aside{
-  background:var(--bg2);border-right:1px solid var(--b);
-  overflow-y:auto;display:flex;flex-direction:column;
-}
-@media(max-width:860px){aside{display:none;}}
-.sb-top{padding:1rem;border-bottom:1px solid var(--b);}
-.sb-search{
-  width:100%;background:var(--bg4);border:1px solid var(--b2);border-radius:8px;
-  color:var(--txt);font-family:'Inter',sans-serif;font-size:.8rem;
-  padding:.5rem .75rem;outline:none;transition:border-color .2s;
-}
-.sb-search:focus{border-color:var(--p);}
-.sb-search::placeholder{color:var(--mut2);}
-.sb-section{padding:.75rem 1rem .3rem;}
-.sb-label{font-size:.62rem;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--mut);margin-bottom:.5rem;}
-.nav-item{
-  display:flex;align-items:center;gap:.55rem;padding:.55rem .75rem;border-radius:8px;
-  cursor:pointer;font-size:.82rem;font-weight:500;color:var(--mut);border:1px solid transparent;
-  transition:all .15s;margin-bottom:.15rem;
-}
-.nav-item:hover{background:var(--bg3);color:var(--txt);}
-.nav-item.active{background:rgba(108,99,255,.12);color:var(--p);border-color:rgba(108,99,255,.22);}
-.nav-item i{width:15px;text-align:center;font-size:.8rem;}
-.agent-row{
-  display:flex;align-items:center;gap:.5rem;padding:.4rem .75rem;border-radius:7px;
-  font-size:.78rem;color:var(--mut);cursor:pointer;transition:all .15s;
-  margin-bottom:.1rem;
-}
-.agent-row:hover{background:var(--bg3);color:var(--txt);}
-.agent-row .dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
-.src-tag{
-  margin-left:auto;font-size:.6rem;padding:.1rem .35rem;border-radius:4px;font-weight:700;
-}
-.src-cf{background:rgba(245,158,11,.15);color:var(--a);}
-.src-int{background:rgba(52,211,153,.12);color:var(--g);}
-.src-hyb{background:rgba(108,99,255,.15);color:var(--v);}
-
-/* MAIN */
-main{display:flex;flex-direction:column;overflow:hidden;}
-
-/* TABS */
-.tabs{
-  display:flex;gap:.2rem;padding:.6rem 1.25rem .4rem;
-  border-bottom:1px solid var(--b);background:var(--bg2);flex-shrink:0;overflow-x:auto;
-}
-.tab{
-  display:flex;align-items:center;gap:.4rem;padding:.4rem .85rem;border-radius:7px;
-  font-size:.78rem;font-weight:700;cursor:pointer;border:1px solid transparent;
-  color:var(--mut);background:none;transition:all .15s;font-family:'Inter',sans-serif;
-  white-space:nowrap;
-}
-.tab:hover{color:var(--txt);background:var(--bg3);}
-.tab.active{background:rgba(108,99,255,.14);color:var(--p);border-color:rgba(108,99,255,.28);}
-
-/* PANELS */
-.panel{display:none;flex:1;overflow:hidden;flex-direction:column;}
-.panel.active{display:flex;}
-
-/* PIPELINE */
-.pipeline-wrap{display:grid;grid-template-columns:320px 1fr;flex:1;overflow:hidden;}
-@media(max-width:1000px){.pipeline-wrap{grid-template-columns:1fr;}}
-.pl-left{
-  padding:1.1rem;border-right:1px solid var(--b);overflow-y:auto;
-  display:flex;flex-direction:column;gap:.85rem;
-}
-.pl-right{padding:1.1rem;overflow-y:auto;}
-
-.card{background:var(--bg3);border:1px solid var(--b);border-radius:12px;padding:1.1rem;}
-.card-title{font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--mut);margin-bottom:.6rem;display:flex;align-items:center;gap:.4rem;}
-textarea,input[type=text]{
-  width:100%;background:var(--bg4);border:1px solid var(--b2);border-radius:8px;
-  color:var(--txt);font-family:'Inter',sans-serif;font-size:.85rem;
-  padding:.65rem .85rem;outline:none;transition:border-color .2s;resize:vertical;
-}
-textarea:focus,input[type=text]:focus{border-color:var(--p);}
-textarea::placeholder,input::placeholder{color:var(--mut2);}
-textarea{min-height:110px;}
-
-.agents-grid{display:grid;grid-template-columns:1fr 1fr;gap:.35rem;margin-top:.5rem;}
-.ach{
-  display:flex;align-items:center;gap:.4rem;padding:.4rem .55rem;border-radius:7px;
-  cursor:pointer;font-size:.75rem;font-weight:600;color:var(--mut);
-  border:1px solid transparent;transition:all .15s;
-}
-.ach:hover{background:var(--bg5);}
-.ach.on{border-color:rgba(108,99,255,.3);background:rgba(108,99,255,.08);color:var(--txt);}
-.ach input{accent-color:var(--p);width:12px;height:12px;}
-
-.run-btn{
-  width:100%;padding:.8rem;border-radius:9px;border:none;cursor:pointer;
-  background:var(--grad);color:#fff;font-size:.9rem;font-weight:800;
-  display:flex;align-items:center;justify-content:center;gap:.5rem;
-  box-shadow:0 0 20px rgba(108,99,255,.3);transition:all .2s;font-family:'Inter',sans-serif;
-}
-.run-btn:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 0 32px rgba(108,99,255,.5);}
-.run-btn:disabled{opacity:.45;cursor:not-allowed;}
-
-/* progress */
-.prog-step{
-  display:flex;align-items:center;gap:.55rem;padding:.4rem .5rem;border-radius:7px;
-  font-size:.78rem;font-weight:500;color:var(--mut);transition:all .25s;
-}
-.prog-step.active{color:var(--p);background:rgba(108,99,255,.08);}
-.prog-step.done{color:var(--g);}
-.prog-step.err{color:var(--r);}
-.prog-step .si{width:18px;text-align:center;font-size:.8rem;}
-.spin{
-  display:inline-block;width:13px;height:13px;border-radius:50%;
-  border:2px solid rgba(108,99,255,.25);border-top-color:var(--p);
-  animation:spin .6s linear infinite;
-}
-@keyframes spin{to{transform:rotate(360deg);}}
-
-/* result cards */
-.empty-state{
-  display:flex;flex-direction:column;align-items:center;justify-content:center;
-  height:100%;gap:.9rem;color:var(--mut);text-align:center;padding:2rem;
-}
-.empty-state .ico{font-size:3rem;opacity:.2;}
-
-.rcard{
-  background:var(--bg3);border:1px solid var(--b);border-radius:12px;
-  overflow:hidden;animation:fadeUp .35s ease;margin-bottom:.85rem;
-}
-@keyframes fadeUp{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
-.rcard-head{
-  display:flex;align-items:center;justify-content:space-between;
-  padding:.75rem 1rem;border-bottom:1px solid var(--b);
-}
-.ragent{display:flex;align-items:center;gap:.6rem;}
-.ravar{width:32px;height:32px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:.95rem;flex-shrink:0;}
-.rname{font-weight:700;font-size:.85rem;}
-.rmodel{font-size:.65rem;color:var(--mut);font-family:'JetBrains Mono',monospace;margin-top:.1rem;}
-.rmeta{display:flex;align-items:center;gap:.4rem;}
-.badge{
-  padding:.18rem .45rem;border-radius:5px;font-size:.65rem;font-weight:700;
-  background:var(--bg4);border:1px solid var(--b);color:var(--mut);
-  font-family:'JetBrains Mono',monospace;
-}
-.badge-cf{background:rgba(245,158,11,.12);border-color:rgba(245,158,11,.25);color:var(--a);}
-.badge-int{background:rgba(52,211,153,.1);border-color:rgba(52,211,153,.22);color:var(--g);}
-.badge-fb{background:rgba(108,99,255,.1);border-color:rgba(108,99,255,.22);color:var(--v);}
-.cbtn{background:none;border:1px solid var(--b);color:var(--mut);padding:.2rem .5rem;border-radius:5px;cursor:pointer;font-size:.7rem;transition:all .15s;}
-.cbtn:hover{border-color:var(--p);color:var(--p);}
-.rbody{padding:1rem;font-size:.85rem;line-height:1.7;}
-.rbody.loading{color:var(--mut);font-style:italic;}
-.lbar{height:3px;background:var(--grad);border-radius:99px;animation:lb 1s ease-in-out infinite alternate;margin-bottom:.5rem;}
-@keyframes lb{from{width:25%;opacity:.4;}to{width:100%;opacity:1;}}
-
-/* markdown */
-.rbody h1,.rbody h2,.rbody h3{font-family:'Space Grotesk',sans-serif;margin:.85rem 0 .4rem;}
-.rbody h1{font-size:1.1rem;}.rbody h2{font-size:1rem;}.rbody h3{font-size:.92rem;}
-.rbody p{margin:.4rem 0;color:#c9d1d9;}
-.rbody ul,.rbody ol{padding-left:1.2rem;margin:.4rem 0;}
-.rbody li{margin:.18rem 0;color:#c9d1d9;}
-.rbody code{background:var(--bg4);border:1px solid var(--b2);padding:.1rem .3rem;border-radius:4px;font-family:'JetBrains Mono',monospace;font-size:.78rem;color:var(--c);}
-.rbody pre{background:var(--bg4);border:1px solid var(--b2);border-radius:8px;padding:.85rem;overflow-x:auto;margin:.6rem 0;}
-.rbody pre code{background:none;border:none;color:#e6edf3;font-size:.78rem;}
-.rbody strong{color:var(--txt);font-weight:700;}
-.rbody blockquote{border-left:3px solid var(--p);padding-left:.65rem;margin:.4rem 0;color:var(--mut);font-style:italic;}
-.rbody hr{border:none;border-top:1px solid var(--b);margin:.75rem 0;}
-.rbody table{width:100%;border-collapse:collapse;font-size:.78rem;margin:.6rem 0;}
-.rbody th{background:var(--bg4);padding:.4rem .65rem;border:1px solid var(--b2);text-align:left;}
-.rbody td{padding:.4rem .65rem;border:1px solid var(--b);}
-
-/* CHAT */
-.chat-wrap{display:flex;flex-direction:column;flex:1;overflow:hidden;}
-.chat-toolbar{
-  padding:.5rem 1.25rem;border-bottom:1px solid var(--b);background:var(--bg2);
-  display:flex;align-items:center;gap:.6rem;flex-shrink:0;flex-wrap:wrap;
-}
-.msel{background:var(--bg3);border:1px solid var(--b2);color:var(--txt);padding:.35rem .65rem;border-radius:7px;font-size:.78rem;outline:none;cursor:pointer;}
-.chat-msgs{flex:1;overflow-y:auto;padding:1.1rem;display:flex;flex-direction:column;gap:.85rem;}
-.chat-foot{
-  padding:.85rem 1.25rem;border-top:1px solid var(--b);background:var(--bg2);
-  display:flex;gap:.6rem;align-items:flex-end;flex-shrink:0;
-}
-.cinput{
-  flex:1;background:var(--bg3);border:1px solid var(--b2);border-radius:10px;
-  color:var(--txt);font-family:'Inter',sans-serif;font-size:.875rem;
-  padding:.65rem .9rem;resize:none;outline:none;min-height:42px;max-height:130px;transition:border-color .2s;
-}
-.cinput:focus{border-color:var(--p);}
-.csend{
-  background:var(--grad);border:none;color:#fff;padding:.6rem 1rem;
-  border-radius:10px;cursor:pointer;font-size:.95rem;flex-shrink:0;
-  transition:all .2s;box-shadow:0 0 14px rgba(108,99,255,.25);
-}
-.csend:hover:not(:disabled){transform:translateY(-1px);}
-.csend:disabled{opacity:.45;cursor:not-allowed;}
-.msg{display:flex;gap:.65rem;max-width:820px;}
-.msg.u{flex-direction:row-reverse;align-self:flex-end;}
-.mav{width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:.9rem;flex-shrink:0;}
-.mcont{background:var(--bg3);border:1px solid var(--b);border-radius:10px;padding:.65rem .9rem;font-size:.85rem;line-height:1.65;max-width:580px;}
-.msg.u .mcont{background:rgba(108,99,255,.1);border-color:rgba(108,99,255,.22);}
-.mmod{font-size:.65rem;color:var(--mut);margin-top:.25rem;font-family:'JetBrains Mono',monospace;}
-
-/* AGENTS PANEL */
-.ap{padding:1.1rem;overflow-y:auto;flex:1;}
-.ap-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:1rem;}
-.acard{background:var(--bg3);border:1px solid var(--b);border-radius:12px;padding:1.3rem;transition:all .2s;}
-.acard:hover{border-color:var(--b2);transform:translateY(-2px);}
-.actop{display:flex;gap:.75rem;margin-bottom:.85rem;}
-.acico{width:48px;height:48px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.4rem;flex-shrink:0;}
-.acinfo h3{font-family:'Space Grotesk',sans-serif;font-size:.95rem;font-weight:700;margin-bottom:.2rem;}
-.acinfo p{color:var(--mut);font-size:.78rem;line-height:1.5;}
-.acmeta{display:flex;align-items:center;gap:.4rem;flex-wrap:wrap;margin-top:.7rem;}
-.acmodel{background:var(--bg4);border:1px solid var(--b2);padding:.2rem .55rem;border-radius:5px;font-family:'JetBrains Mono',monospace;font-size:.64rem;color:var(--c);}
-.actest{width:100%;margin-top:.75rem;padding:.5rem;border-radius:7px;border:1px solid var(--b2);background:var(--bg4);color:var(--txt);cursor:pointer;font-size:.78rem;font-weight:700;transition:all .2s;font-family:'Inter',sans-serif;}
-.actest:hover{border-color:var(--p);color:var(--p);}
-
-/* STATUS PANEL */
-.sp{padding:1.1rem;overflow-y:auto;flex:1;}
-.sp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:1rem;margin-bottom:1.5rem;}
-.scard{background:var(--bg3);border:1px solid var(--b);border-radius:12px;padding:1.2rem;}
-.scard h4{font-family:'Space Grotesk',sans-serif;font-size:.85rem;font-weight:700;margin-bottom:.6rem;display:flex;align-items:center;gap:.4rem;}
-.sval{font-family:'JetBrains Mono',monospace;font-size:1.6rem;font-weight:700;}
-.sval.ok{color:var(--g);}
-.sval.warn{color:var(--a);}
-.sval.err{color:var(--r);}
-.slabel{font-size:.72rem;color:var(--mut);margin-top:.2rem;}
-
-/* scrollbar */
-::-webkit-scrollbar{width:4px;height:4px;}
-::-webkit-scrollbar-track{background:var(--bg);}
-::-webkit-scrollbar-thumb{background:var(--bg5);border-radius:99px;}
-
-/* toast */
-.toast{position:fixed;bottom:1.25rem;right:1.25rem;background:var(--bg3);border:1px solid var(--b2);color:var(--txt);padding:.65rem 1.1rem;border-radius:9px;font-size:.82rem;font-weight:600;z-index:999;animation:fadeUp .25s ease;box-shadow:0 8px 24px rgba(0,0,0,.5);}
+  :root {
+    --primary: #6C63FF; --secondary: #22D3EE; --accent: #EC4899;
+    --bg: #0B0D17; --surface: #141622; --card: #1B1E2E;
+    --border: #2A2D40; --text: #E8E9F3; --muted: #6B7280;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Inter', system-ui, sans-serif; min-height: 100vh; }
+  ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  .gradient-text { background: linear-gradient(135deg, var(--primary), var(--secondary)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+  .glass { background: rgba(27,30,46,0.8); backdrop-filter: blur(12px); border: 1px solid var(--border); }
+  .agent-card { transition: all .2s; }
+  .agent-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(108,99,255,.2); }
+  .tab-btn { transition: all .2s; border-bottom: 2px solid transparent; }
+  .tab-btn.active { border-bottom-color: var(--primary); color: white; }
+  .tab-panel { display: none; } .tab-panel.active { display: block; }
+  .badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+  .badge-cf { background: #1e3a5f; color: #60A5FA; }
+  .badge-hybrid { background: #1e2d1e; color: #34D399; }
+  .badge-int { background: #2d1e1e; color: #F87171; }
+  .progress-step { transition: all .3s; }
+  .progress-step.done { opacity: 1; } .progress-step.pending { opacity: .4; }
+  .msg-user { background: linear-gradient(135deg, #1e1b4b, #312e81); border-left: 3px solid var(--primary); }
+  .msg-ai { background: var(--card); border-left: 3px solid var(--secondary); }
+  .result-card { animation: slideIn .3s ease; }
+  @keyframes slideIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+  .pulse-dot { animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+  .spin { animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  pre code { font-family: 'Fira Code', monospace; font-size: 13px; }
+  .cap-pill { background: rgba(108,99,255,.15); color: #a5b4fc; border: 1px solid rgba(108,99,255,.3); border-radius: 999px; padding: 2px 8px; font-size: 11px; }
+  textarea:focus, input:focus, select:focus { outline: none; border-color: var(--primary) !important; box-shadow: 0 0 0 2px rgba(108,99,255,.2); }
+  .model-opt { padding: 6px 10px; background: var(--card); color: var(--text); border: none; }
+  .typing-cursor { display: inline-block; width: 2px; height: 1em; background: var(--secondary); animation: blink .7s infinite; vertical-align: text-bottom; margin-left: 2px; }
+  @keyframes blink { 0%,100%{opacity:1}50%{opacity:0} }
 </style>
 </head>
 <body>
-<div class="app">
 
 <!-- HEADER -->
-<header>
-  <div class="logo"><i class="fas fa-robot"></i> SixTech MAS</div>
-  <div class="hbadges">
-    <div class="hbadge hbadge-cf"><i class="fas fa-cloud" style="font-size:.65rem;"></i> Cloudflare Workers AI</div>
-    <div class="hbadge hbadge-int"><i class="fas fa-server" style="font-size:.65rem;"></i> sixtech-workspace</div>
-    <div class="hbadge hbadge-live"><span class="sdot"></span> 8 Agentes Online</div>
+<header class="glass sticky top-0 z-50 px-6 py-3 flex items-center justify-between">
+  <div class="flex items-center gap-3">
+    <div class="w-9 h-9 rounded-xl flex items-center justify-center text-lg" style="background:linear-gradient(135deg,#6C63FF,#22D3EE)">🤖</div>
+    <div>
+      <div class="font-bold text-white">SixTech MAS <span class="text-xs px-1.5 py-0.5 rounded-full ml-1" style="background:#1e3a5f;color:#60A5FA">v3.0</span></div>
+      <div class="text-xs" style="color:var(--muted)">Multi-Agent System — Cloudflare Workers AI</div>
+    </div>
+  </div>
+  <div class="flex items-center gap-3">
+    <div id="status-dot" class="flex items-center gap-2 text-xs" style="color:#34D399">
+      <span class="pulse-dot w-2 h-2 rounded-full bg-emerald-400 inline-block"></span>
+      <span id="status-text">Online</span>
+    </div>
+    <a href="https://github.com/kainow252-cmyk/sixtechbrasil" target="_blank"
+       class="text-sm px-3 py-1.5 rounded-lg flex items-center gap-2"
+       style="background:var(--card);border:1px solid var(--border);color:var(--text)">
+      <i class="fab fa-github"></i> GitHub
+    </a>
   </div>
 </header>
 
-<!-- SIDEBAR -->
-<aside>
-  <div class="sb-top">
-    <input class="sb-search" type="text" placeholder="🔍  Buscar agentes..." id="sb-search" oninput="filterAgents(this.value)"/>
-  </div>
-
-  <div class="sb-section">
-    <div class="sb-label">Navegação</div>
-    <div class="nav-item active" onclick="showTab('pipeline')"><i class="fas fa-project-diagram"></i> Pipeline</div>
-    <div class="nav-item" onclick="showTab('chat')"><i class="fas fa-comments"></i> Chat</div>
-    <div class="nav-item" onclick="showTab('agents')"><i class="fas fa-users-cog"></i> Agentes</div>
-    <div class="nav-item" onclick="showTab('status')"><i class="fas fa-heartbeat"></i> Status</div>
-  </div>
-
-  <div class="sb-section">
-    <div class="sb-label">sixtech-workspace</div>
-    <div id="sb-agents-workspace"></div>
-  </div>
-  <div class="sb-section">
-    <div class="sb-label">Cloudflare AI</div>
-    <div id="sb-agents-cf"></div>
-  </div>
-</aside>
-
 <!-- MAIN -->
-<main>
-<div class="tabs">
-  <button class="tab active" id="tab-pipeline" onclick="showTab('pipeline')"><i class="fas fa-project-diagram"></i> Pipeline</button>
-  <button class="tab" id="tab-chat" onclick="showTab('chat')"><i class="fas fa-comments"></i> Chat</button>
-  <button class="tab" id="tab-agents" onclick="showTab('agents')"><i class="fas fa-users-cog"></i> Agentes</button>
-  <button class="tab" id="tab-status" onclick="showTab('status')"><i class="fas fa-heartbeat"></i> Status</button>
-</div>
+<div class="max-w-7xl mx-auto px-4 py-6">
 
-<!-- PIPELINE -->
-<div class="panel active" id="panel-pipeline">
-  <div class="pipeline-wrap">
-    <div class="pl-left">
-      <div class="card">
-        <div class="card-title"><i class="fas fa-pen" style="color:var(--p);"></i> Tarefa</div>
-        <textarea id="pp-prompt" placeholder="Descreva a tarefa para os agentes colaborarem...
+  <!-- TABS -->
+  <nav class="flex gap-1 mb-6 p-1 rounded-xl" style="background:var(--surface);border:1px solid var(--border);width:fit-content">
+    <button class="tab-btn active px-5 py-2.5 rounded-lg text-sm font-medium" onclick="showTab('pipeline')" style="background:var(--card)">
+      <i class="fas fa-project-diagram mr-2"></i>Pipeline
+    </button>
+    <button class="tab-btn px-5 py-2.5 rounded-lg text-sm font-medium text-gray-400" onclick="showTab('chat')">
+      <i class="fas fa-comments mr-2"></i>Chat IA
+    </button>
+    <button class="tab-btn px-5 py-2.5 rounded-lg text-sm font-medium text-gray-400" onclick="showTab('agents')">
+      <i class="fas fa-robot mr-2"></i>Agentes
+    </button>
+    <button class="tab-btn px-5 py-2.5 rounded-lg text-sm font-medium text-gray-400" onclick="showTab('status')">
+      <i class="fas fa-chart-line mr-2"></i>Status
+    </button>
+  </nav>
 
-Ex: Crie uma API REST completa em Node.js para gerenciamento de usuários com autenticação JWT, incluindo análise de segurança e documentação."></textarea>
-      </div>
+  <!-- ═══ TAB: PIPELINE ═══════════════════════════════════════════════════ -->
+  <div id="tab-pipeline" class="tab-panel active">
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
 
-      <div class="card">
-        <div class="card-title" style="justify-content:space-between;">
-          <span><i class="fas fa-users" style="color:var(--p);"></i> Agentes</span>
-          <span id="sel-cnt" style="color:var(--p);font-size:.68rem;"></span>
+      <!-- Coluna Esquerda: Configuração -->
+      <div class="space-y-4">
+        <!-- Tarefa -->
+        <div class="glass rounded-2xl p-5">
+          <h3 class="font-semibold text-white mb-3"><i class="fas fa-pen-to-square mr-2" style="color:var(--primary)"></i>Tarefa</h3>
+          <textarea id="pipeline-task" rows="5" placeholder="Descreva o que você precisa...&#10;&#10;Ex: Crie uma API REST em Python com FastAPI para gerenciar usuários com autenticação JWT"
+            class="w-full text-sm rounded-xl p-3 resize-none"
+            style="background:var(--bg);border:1px solid var(--border);color:var(--text)"></textarea>
+          <div class="flex gap-2 mt-3">
+            <button onclick="autoRoute()" class="flex-1 py-2.5 rounded-xl text-sm font-semibold"
+              style="background:linear-gradient(135deg,var(--primary),#4f46e5);color:white">
+              <i class="fas fa-wand-magic-sparkles mr-2"></i>Auto Roteamento
+            </button>
+            <button onclick="clearAll()" class="px-3 py-2.5 rounded-xl text-sm"
+              style="background:var(--card);border:1px solid var(--border);color:var(--muted)">
+              <i class="fas fa-trash"></i>
+            </button>
+          </div>
         </div>
-        <div class="agents-grid" id="ach-grid"></div>
-      </div>
 
-      <div class="card" id="prog-card" style="display:none;">
-        <div class="card-title"><i class="fas fa-cogs" style="color:var(--c);"></i> Progresso</div>
-        <div id="prog-steps" style="display:flex;flex-direction:column;gap:.3rem;"></div>
-      </div>
+        <!-- Seleção de Agentes -->
+        <div class="glass rounded-2xl p-5">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="font-semibold text-white"><i class="fas fa-robot mr-2" style="color:var(--secondary)"></i>Agentes</h3>
+            <span id="agent-count" class="text-xs" style="color:var(--muted)">0 selecionados</span>
+          </div>
+          <div id="agent-checklist" class="space-y-2 max-h-64 overflow-y-auto pr-1"></div>
+          <button onclick="runPipeline()" id="run-btn"
+            class="w-full mt-4 py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2"
+            style="background:linear-gradient(135deg,#059669,#10b981);color:white">
+            <i class="fas fa-play"></i>Executar Pipeline
+          </button>
+        </div>
 
-      <button class="run-btn" id="run-btn" onclick="runPipeline()">
-        <i class="fas fa-play-circle"></i> Executar Pipeline
-      </button>
-    </div>
-
-    <div class="pl-right" id="pl-right">
-      <div class="empty-state" id="pl-empty">
-        <div class="ico">🤖</div>
-        <div style="font-size:.95rem;font-weight:700;color:var(--txt);">Pipeline pronto</div>
-        <div style="font-size:.82rem;max-width:340px;">Configure a tarefa, selecione os agentes e execute.<br/>Agentes internos são tentados primeiro, Cloudflare AI como fallback.</div>
-        <div style="display:flex;gap:.5rem;margin-top:.5rem;flex-wrap:wrap;justify-content:center;">
-          <span class="badge badge-int">🏠 Interno</span>
-          <span style="color:var(--mut);font-size:.78rem;align-self:center;">→ fallback →</span>
-          <span class="badge badge-cf">☁️ Cloudflare AI</span>
+        <!-- Modo de Execução -->
+        <div class="glass rounded-2xl p-5">
+          <h3 class="font-semibold text-white mb-3"><i class="fas fa-sliders mr-2" style="color:var(--accent)"></i>Modo</h3>
+          <div class="space-y-2">
+            <label class="flex items-center gap-3 cursor-pointer">
+              <input type="radio" name="mode" value="pipeline" checked class="accent-purple-500">
+              <div>
+                <div class="text-sm font-medium text-white">Pipeline Sequencial</div>
+                <div class="text-xs" style="color:var(--muted)">Agentes passam contexto entre si</div>
+              </div>
+            </label>
+            <label class="flex items-center gap-3 cursor-pointer">
+              <input type="radio" name="mode" value="orchestrate" class="accent-purple-500">
+              <div>
+                <div class="text-sm font-medium text-white">Roteamento Inteligente</div>
+                <div class="text-xs" style="color:var(--muted)">Auto-seleção por análise de contexto</div>
+              </div>
+            </label>
+          </div>
         </div>
       </div>
-      <div id="pl-stream" style="display:none;"></div>
-    </div>
-  </div>
-</div>
 
-<!-- CHAT -->
-<div class="panel" id="panel-chat">
-  <div class="chat-wrap">
-    <div class="chat-toolbar">
-      <label style="font-size:.72rem;font-weight:800;color:var(--mut);text-transform:uppercase;letter-spacing:.06em;">Modelo:</label>
-      <select class="msel" id="chat-model">
-        <option value="fast">⚡ Llama 3.2 3B — Rápido</option>
-        <option value="balanced" selected>⚖️ Llama 3.1 8B — Balanceado</option>
-        <option value="powerful">💪 Llama 3.3 70B — Poderoso</option>
-        <option value="coder">💻 Qwen 2.5 Coder 32B</option>
-        <option value="reason">🧠 DeepSeek R1 32B</option>
-        <option value="kimi">🌙 Kimi K2.6 (1T params)</option>
-        <option value="gpt">🔷 GPT-OSS 120B</option>
-      </select>
-      <button onclick="clearChat()" style="margin-left:auto;background:none;border:1px solid var(--b);color:var(--mut);padding:.3rem .65rem;border-radius:6px;cursor:pointer;font-size:.75rem;font-family:'Inter',sans-serif;transition:all .15s;" onmouseover="this.style.borderColor='var(--r)';this.style.color='var(--r)'" onmouseout="this.style.borderColor='var(--b)';this.style.color='var(--mut)'">
-        <i class="fas fa-trash"></i> Limpar
-      </button>
-    </div>
-    <div class="chat-msgs" id="chat-msgs">
-      <div class="msg">
-        <div class="mav" style="background:rgba(108,99,255,.15);border:1px solid rgba(108,99,255,.3);">🤖</div>
-        <div>
-          <div class="mcont rbody">
-            Olá! Sou o assistente <strong>SixTech MAS 2.0</strong>.<br/><br/>
-            Tenho acesso a <strong>8 agentes especializados</strong>:<br/>
-            <ul style="margin:.4rem 0;">
-              <li>💻 Developer, 🔍 Pesquisador, ⚖️ Jurídico, 🎨 Designer, 📄 Documentos <em>(sixtech-workspace)</em></li>
-              <li>📊 Analista, 🛡️ Revisor, 🎯 Orquestrador <em>(Cloudflare AI)</em></li>
-            </ul>
-            Para tarefas complexas, use a aba <strong>Pipeline</strong>. 🚀
+      <!-- Coluna Direita: Resultados -->
+      <div class="lg:col-span-2 space-y-4">
+        <!-- Progress Bar -->
+        <div id="progress-bar" class="glass rounded-2xl p-4 hidden">
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-sm font-medium text-white">Executando Pipeline</span>
+            <span id="progress-info" class="text-xs" style="color:var(--muted)"></span>
+          </div>
+          <div id="progress-steps" class="flex gap-2 flex-wrap"></div>
+        </div>
+
+        <!-- Resultados -->
+        <div id="results-container" class="space-y-4">
+          <!-- placeholder -->
+          <div id="results-placeholder" class="glass rounded-2xl p-12 text-center">
+            <div class="text-5xl mb-4">🤖</div>
+            <div class="text-white font-medium mb-2">Pronto para executar</div>
+            <div class="text-sm" style="color:var(--muted)">Configure a tarefa, selecione os agentes e clique em Executar</div>
           </div>
         </div>
       </div>
     </div>
-    <div class="chat-foot">
-      <textarea class="cinput" id="cinput" rows="1" placeholder="Digite sua mensagem... (Enter para enviar)"></textarea>
-      <button class="csend" id="csend" onclick="sendChat()"><i class="fas fa-paper-plane"></i></button>
-    </div>
   </div>
-</div>
 
-<!-- AGENTS -->
-<div class="panel" id="panel-agents">
-  <div class="ap">
-    <div style="margin-bottom:1.2rem;">
-      <h2 style="font-family:'Space Grotesk',sans-serif;font-size:1.3rem;font-weight:800;margin-bottom:.3rem;">Agentes Disponíveis</h2>
-      <p style="color:var(--mut);font-size:.82rem;">8 agentes especializados — backend interno (sixtech-workspace) com fallback automático para Cloudflare Workers AI.</p>
-    </div>
-    <div class="ap-grid" id="ap-grid"></div>
-  </div>
-</div>
+  <!-- ═══ TAB: CHAT ════════════════════════════════════════════════════════ -->
+  <div id="tab-chat" class="tab-panel">
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-5">
 
-<!-- STATUS -->
-<div class="panel" id="panel-status">
-  <div class="sp">
-    <div style="margin-bottom:1.2rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;">
-      <div>
-        <h2 style="font-family:'Space Grotesk',sans-serif;font-size:1.3rem;font-weight:800;margin-bottom:.3rem;">Status da Plataforma</h2>
-        <p style="color:var(--mut);font-size:.82rem;">Monitoramento em tempo real dos provedores de IA.</p>
+      <!-- Sidebar Chat -->
+      <div class="space-y-4">
+        <div class="glass rounded-2xl p-4">
+          <h3 class="font-semibold text-white mb-3"><i class="fas fa-microchip mr-2" style="color:var(--primary)"></i>Modelo</h3>
+          <select id="chat-model" class="w-full text-sm rounded-xl p-2.5"
+            style="background:var(--bg);border:1px solid var(--border);color:var(--text)">
+          </select>
+          <div class="mt-3">
+            <div class="text-xs font-medium mb-2" style="color:var(--muted)">Agente Especialista</div>
+            <select id="chat-agent" class="w-full text-sm rounded-xl p-2.5"
+              style="background:var(--bg);border:1px solid var(--border);color:var(--text)">
+              <option value="">Nenhum (chat livre)</option>
+            </select>
+          </div>
+        </div>
+        <div class="glass rounded-2xl p-4">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="font-semibold text-white text-sm"><i class="fas fa-clock-rotate-left mr-2" style="color:var(--secondary)"></i>Histórico</h3>
+            <button onclick="clearChat()" class="text-xs px-2 py-1 rounded-lg"
+              style="background:var(--card);color:var(--muted)">Limpar</button>
+          </div>
+          <div id="chat-history-list" class="space-y-1 text-xs" style="color:var(--muted)">
+            <div class="text-center py-4">Nenhuma conversa</div>
+          </div>
+        </div>
       </div>
-      <button onclick="loadStatus()" style="background:var(--grad);border:none;color:#fff;padding:.5rem 1rem;border-radius:8px;cursor:pointer;font-size:.8rem;font-weight:700;font-family:'Inter',sans-serif;">
-        <i class="fas fa-sync-alt"></i> Atualizar
-      </button>
-    </div>
-    <div class="sp-grid" id="sp-grid">
-      <div class="scard"><h4><i class="fas fa-circle-notch fa-spin" style="color:var(--p);"></i> Carregando...</h4></div>
-    </div>
-    <div id="sp-detail"></div>
-  </div>
-</div>
 
-</main>
+      <!-- Chat Principal -->
+      <div class="lg:col-span-3 glass rounded-2xl flex flex-col" style="height:600px">
+        <div class="p-4 border-b flex items-center justify-between" style="border-color:var(--border)">
+          <div class="flex items-center gap-2">
+            <span class="text-lg">💬</span>
+            <span class="font-medium text-white">Chat com IA</span>
+          </div>
+          <span id="chat-model-badge" class="badge badge-cf">Llama 3.1 8B</span>
+        </div>
+        <div id="chat-messages" class="flex-1 overflow-y-auto p-4 space-y-4">
+          <div class="msg-ai rounded-xl p-4 text-sm">
+            <div class="font-medium text-cyan-400 mb-1">🤖 Assistente SixTech</div>
+            <div>Olá! Sou o assistente da <strong>SixTech Brasil</strong>, powered by Cloudflare Workers AI. Como posso ajudar você hoje?</div>
+          </div>
+        </div>
+        <div id="typing-indicator" class="px-4 py-2 text-xs hidden" style="color:var(--muted)">
+          <span class="pulse-dot w-1.5 h-1.5 rounded-full bg-cyan-400 inline-block mr-2"></span>IA digitando...
+        </div>
+        <div class="p-4 border-t" style="border-color:var(--border)">
+          <div class="flex gap-2">
+            <textarea id="chat-input" rows="2" placeholder="Digite sua mensagem... (Enter para enviar)"
+              class="flex-1 text-sm rounded-xl p-3 resize-none"
+              style="background:var(--bg);border:1px solid var(--border);color:var(--text)"
+              onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat()}"></textarea>
+            <button onclick="sendChat()" id="chat-send-btn"
+              class="px-4 rounded-xl font-semibold self-end py-3"
+              style="background:linear-gradient(135deg,var(--primary),#4f46e5);color:white">
+              <i class="fas fa-paper-plane"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ TAB: AGENTES ═════════════════════════════════════════════════════ -->
+  <div id="tab-agents" class="tab-panel">
+    <div class="mb-4 flex items-center gap-3">
+      <input id="agent-search" type="text" placeholder="Buscar agente..."
+        class="text-sm rounded-xl px-4 py-2.5 w-64"
+        style="background:var(--surface);border:1px solid var(--border);color:var(--text)"
+        oninput="filterAgents(this.value)">
+      <div class="flex gap-2">
+        <button onclick="filterBySource('all')" class="filter-btn active px-3 py-2 rounded-lg text-xs font-medium" style="background:var(--primary);color:white">Todos</button>
+        <button onclick="filterBySource('hybrid')" class="filter-btn px-3 py-2 rounded-lg text-xs font-medium" style="background:var(--card);color:var(--muted)">Hybrid</button>
+        <button onclick="filterBySource('cloudflare')" class="filter-btn px-3 py-2 rounded-lg text-xs font-medium" style="background:var(--card);color:var(--muted)">Cloudflare</button>
+      </div>
+    </div>
+    <div id="agents-grid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"></div>
+  </div>
+
+  <!-- ═══ TAB: STATUS ══════════════════════════════════════════════════════ -->
+  <div id="tab-status" class="tab-panel">
+    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+      <div class="glass rounded-2xl p-5">
+        <div class="text-3xl font-bold gradient-text" id="stat-agents">9</div>
+        <div class="text-sm mt-1" style="color:var(--muted)">Agentes Ativos</div>
+      </div>
+      <div class="glass rounded-2xl p-5">
+        <div class="text-3xl font-bold" style="color:#22D3EE" id="stat-models">8</div>
+        <div class="text-sm mt-1" style="color:var(--muted)">Modelos de IA</div>
+      </div>
+      <div class="glass rounded-2xl p-5">
+        <div class="text-3xl font-bold" style="color:#34D399" id="stat-repos">4</div>
+        <div class="text-sm mt-1" style="color:var(--muted)">Repos Integrados</div>
+      </div>
+      <div class="glass rounded-2xl p-5">
+        <div class="text-3xl font-bold" style="color:#F59E0B" id="stat-ver">v3.0</div>
+        <div class="text-sm mt-1" style="color:var(--muted)">Versão</div>
+      </div>
+    </div>
+    <div id="status-details" class="grid grid-cols-1 lg:grid-cols-2 gap-4"></div>
+  </div>
+
 </div>
 
 <script>
-// ── STATE ──────────────────────────────────────────────────────────────────
-let AGENTS = []
-let selected = new Set(['research','developer','analyst','reviewer','orchestrator'])
-let running = false
+// ── Estado global
+let agents = [], models = {}, chatHistory = [], allAgents = []
 
-// ── INIT ───────────────────────────────────────────────────────────────────
+// ── Inicialização
 async function init() {
   try {
-    const r = await fetch('/api/agents')
-    const d = await r.json()
-    AGENTS = d.agents
-    renderAll()
-    updateSelCnt()
-  } catch(e) { toast('⚠️ Erro ao carregar agentes: ' + e.message) }
+    const [agentsRes, modelsRes] = await Promise.all([
+      fetch('/api/agents'), fetch('/api/models')
+    ])
+    const agentsData = await agentsRes.json()
+    const modelsData = await modelsRes.json()
+    agents = agentsData.agents
+    allAgents = [...agents]
+    models = modelsData.models
+
+    renderAgentChecklist()
+    renderAgentsGrid()
+    renderChatModels()
+    loadStatus()
+  } catch(e) {
+    console.error('Init error:', e)
+  }
 }
 
-function renderAll() {
-  renderSidebar()
-  renderCheckboxes()
-  renderAgentsPanel()
-}
-
-function renderSidebar() {
-  const ws = document.getElementById('sb-agents-workspace')
-  const cf = document.getElementById('sb-agents-cf')
-  const src = tag => ({ 'cloudflare':'src-cf', 'internal':'src-int', 'hybrid':'src-hyb' }[tag] || 'src-cf')
-  const lbl = tag => ({ 'cloudflare':'CF', 'internal':'INT', 'hybrid':'HYB' }[tag] || 'CF')
-  
-  const grouped = { workspace: [], cf: [] }
-  AGENTS.forEach(a => {
-    if (a.category === 'sixtech-workspace') grouped.workspace.push(a)
-    else grouped.cf.push(a)
+// ── Tabs
+function showTab(name) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'))
+  document.querySelectorAll('.tab-btn').forEach(b => {
+    b.classList.remove('active')
+    b.style.background = 'transparent'
+    b.style.color = '#6B7280'
   })
-  
-  ws.innerHTML = grouped.workspace.map(a => \`
-    <div class="agent-row" onclick="showTab('agents')">
-      <span class="dot" style="background:\${a.color}"></span>
-      <span>\${a.emoji} \${a.name}</span>
-      <span class="src-tag \${src(a.source)}">\${lbl(a.source)}</span>
-    </div>
-  \`).join('')
-  
-  cf.innerHTML = grouped.cf.map(a => \`
-    <div class="agent-row" onclick="showTab('agents')">
-      <span class="dot" style="background:\${a.color}"></span>
-      <span>\${a.emoji} \${a.name}</span>
-      <span class="src-tag src-cf">CF</span>
-    </div>
-  \`).join('')
+  document.getElementById('tab-' + name).classList.add('active')
+  const btn = event.currentTarget
+  btn.classList.add('active')
+  btn.style.background = 'var(--card)'
+  btn.style.color = 'white'
 }
 
-function renderCheckboxes() {
-  const el = document.getElementById('ach-grid')
-  el.innerHTML = AGENTS.map(a => \`
-    <label class="ach \${selected.has(a.id)?'on':''}" onclick="toggleSel('\${a.id}')">
-      <input type="checkbox" \${selected.has(a.id)?'checked':''} onclick="event.stopPropagation()"/>
-      <span>\${a.emoji} \${a.name}</span>
+// ── Agent Checklist
+function renderAgentChecklist() {
+  const container = document.getElementById('agent-checklist')
+  container.innerHTML = agents.map(a => \`
+    <label class="flex items-center gap-3 p-2 rounded-xl cursor-pointer hover:bg-white/5 transition-colors agent-check-item" data-source="\${a.source}">
+      <input type="checkbox" value="\${a.id}" class="accent-purple-500 agent-checkbox"
+        onchange="updateAgentCount()">
+      <span class="text-lg">\${a.emoji}</span>
+      <div class="flex-1 min-w-0">
+        <div class="text-sm font-medium text-white truncate">\${a.name}</div>
+        <div class="text-xs truncate" style="color:#6B7280">\${a.category}</div>
+      </div>
+      <span class="badge \${a.source === 'hybrid' ? 'badge-hybrid' : 'badge-cf'} shrink-0">
+        \${a.source === 'hybrid' ? 'hybrid' : 'cf'}
+      </span>
     </label>
   \`).join('')
+  updateAgentCount()
 }
 
-function renderAgentsPanel() {
-  const srcBadge = s => ({
-    cloudflare: '<span class="badge badge-cf">☁️ Cloudflare AI</span>',
-    internal:   '<span class="badge badge-int">🏠 Interno</span>',
-    hybrid:     '<span class="badge badge-int">🏠 + </span><span class="badge badge-cf">☁️ Fallback</span>'
-  }[s] || '')
-  
-  document.getElementById('ap-grid').innerHTML = AGENTS.map(a => \`
-    <div class="acard">
-      <div class="actop">
-        <div class="acico" style="background:\${a.color}18;border:1px solid \${a.color}40;">\${a.emoji}</div>
-        <div class="acinfo">
-          <h3>\${a.name}</h3>
-          <p>\${a.desc}</p>
-        </div>
-      </div>
-      <div class="acmeta">
-        \${srcBadge(a.source)}
-        <span class="acmodel">\${a.model.split('/').slice(-1)[0]}</span>
-      </div>
-      <button class="actest" onclick="testAgent('\${a.id}')">
-        <i class="fas fa-flask"></i> Testar Agente
-      </button>
-    </div>
-  \`).join('')
+function updateAgentCount() {
+  const count = document.querySelectorAll('.agent-checkbox:checked').length
+  document.getElementById('agent-count').textContent = count + ' selecionados'
 }
 
-function updateSelCnt() {
-  document.getElementById('sel-cnt').textContent = selected.size + ' selecionados'
-}
+// ── Auto Routing
+async function autoRoute() {
+  const task = document.getElementById('pipeline-task').value.trim()
+  if (!task) return
 
-function toggleSel(id) {
-  selected.has(id) ? selected.delete(id) : selected.add(id)
-  renderCheckboxes()
-  updateSelCnt()
-}
-
-function filterAgents(q) {
-  const rows = document.querySelectorAll('.agent-row')
-  rows.forEach(r => {
-    r.style.display = r.textContent.toLowerCase().includes(q.toLowerCase()) ? '' : 'none'
+  document.querySelectorAll('.agent-checkbox').forEach(cb => cb.checked = false)
+  const res = await fetch('/api/orchestrate', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({task})
   })
+  if (!res.ok) return
+  const data = await res.json()
+  data.agentsUsed.forEach(id => {
+    const cb = document.querySelector(\`.agent-checkbox[value="\${id}"]\`)
+    if (cb) cb.checked = true
+  })
+  updateAgentCount()
+  document.querySelector('input[name="mode"][value="orchestrate"]').checked = true
 }
 
-// ── TABS ───────────────────────────────────────────────────────────────────
-function showTab(name) {
-  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'))
-  document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'))
-  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'))
-  document.getElementById('panel-' + name).classList.add('active')
-  document.getElementById('tab-' + name).classList.add('active')
-  if (name === 'status') loadStatus()
-}
-
-// ── PIPELINE ───────────────────────────────────────────────────────────────
+// ── Run Pipeline
 async function runPipeline() {
-  const prompt = document.getElementById('pp-prompt').value.trim()
-  if (!prompt) { toast('⚠️ Digite uma tarefa!'); return }
-  if (selected.size === 0) { toast('⚠️ Selecione ao menos 1 agente!'); return }
-  if (running) return
+  const task = document.getElementById('pipeline-task').value.trim()
+  if (!task) return alert('Digite uma tarefa!')
 
-  running = true
+  const selectedIds = [...document.querySelectorAll('.agent-checkbox:checked')].map(cb => cb.value)
+  if (!selectedIds.length) return alert('Selecione ao menos um agente!')
+
+  const mode = document.querySelector('input[name="mode"]:checked').value
   const btn = document.getElementById('run-btn')
   btn.disabled = true
-  btn.innerHTML = '<span class="spin"></span> Executando...'
+  btn.innerHTML = '<i class="fas fa-spinner spin mr-2"></i>Executando...'
 
-  const empty = document.getElementById('pl-empty')
-  const stream = document.getElementById('pl-stream')
-  empty.style.display = 'none'
-  stream.style.display = 'block'
-  stream.innerHTML = ''
-
-  const progCard = document.getElementById('prog-card')
-  const progSteps = document.getElementById('prog-steps')
-  progCard.style.display = 'block'
-
-  const agentList = [...selected]
-  const amap = Object.fromEntries(AGENTS.map(a => [a.id, a]))
-
-  // init progress
-  progSteps.innerHTML = agentList.map(id => {
-    const a = amap[id]
-    return a ? \`<div class="prog-step" id="ps-\${id}"><span class="si">\${a.emoji}</span><span>\${a.name}</span></div>\` : ''
+  // Progress bar
+  const pb = document.getElementById('progress-bar')
+  pb.classList.remove('hidden')
+  const steps = document.getElementById('progress-steps')
+  steps.innerHTML = selectedIds.map((id, i) => {
+    const a = agents.find(x => x.id === id)
+    return \`<div class="progress-step pending flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs" id="step-\${id}"
+      style="background:var(--card);border:1px solid var(--border)">
+      <span>\${a?.emoji || '🤖'}</span><span>\${a?.name || id}</span>
+    </div>\`
   }).join('')
 
-  // skeleton cards
-  agentList.forEach(id => {
-    const a = amap[id]
-    if (!a) return
-    stream.innerHTML += \`
-      <div class="rcard" id="rc-\${id}">
-        <div class="rcard-head">
-          <div class="ragent">
-            <div class="ravar" style="background:\${a.color}18;border:1px solid \${a.color}40;">\${a.emoji}</div>
-            <div><div class="rname">\${a.name}</div><div class="rmodel">aguardando...</div></div>
-          </div>
-          <div class="rmeta"><span class="badge" id="bd-src-\${id}">—</span><span class="badge" id="bd-dur-\${id}">—</span></div>
-        </div>
-        <div class="rbody loading" id="rb-\${id}"><div class="lbar"></div>Processando...</div>
+  // Clear results
+  const container = document.getElementById('results-container')
+  document.getElementById('results-placeholder')?.remove()
+  container.innerHTML = ''
+
+  try {
+    if (mode === 'orchestrate') {
+      document.getElementById('progress-info').textContent = 'Roteamento inteligente...'
+      selectedIds.forEach(id => document.getElementById('step-' + id)?.classList.add('done'))
+
+      const res = await fetch('/api/orchestrate', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({task})
+      })
+      const data = await res.json()
+      data.results.forEach(r => renderResult(r, container))
+    } else {
+      for (let i = 0; i < selectedIds.length; i++) {
+        const id = selectedIds[i]
+        const stepEl = document.getElementById('step-' + id)
+        if (stepEl) {
+          stepEl.style.background = 'rgba(108,99,255,.2)'
+          stepEl.style.borderColor = '#6C63FF'
+          stepEl.innerHTML = stepEl.innerHTML.replace('</div>', '') + ' <i class="fas fa-spinner spin"></i></div>'
+        }
+        document.getElementById('progress-info').textContent = \`\${i+1}/\${selectedIds.length}\`
+
+        const res = await fetch('/api/agent/' + id, {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({task, message: task})
+        })
+        const result = await res.json()
+        renderResult(result, container)
+
+        if (stepEl) {
+          stepEl.style.background = 'rgba(52,211,153,.1)'
+          stepEl.style.borderColor = '#34D399'
+          stepEl.classList.remove('pending')
+          stepEl.classList.add('done')
+          stepEl.innerHTML = stepEl.innerHTML.replace(/<i class.*<\/i>/, '✓')
+        }
+      }
+    }
+  } catch(e) {
+    container.innerHTML += \`<div class="glass rounded-2xl p-5 border border-red-800/50">
+      <div class="text-red-400">❌ Erro: \${e.message}</div></div>\`
+  }
+
+  btn.disabled = false
+  btn.innerHTML = '<i class="fas fa-play mr-2"></i>Executar Pipeline'
+}
+
+function renderResult(r, container) {
+  const sourceLabel = r.usedFallback ? '☁️ CF Fallback' : r.source === 'internal' ? '🖥️ Interno' : '☁️ Cloudflare'
+  const sourceBadge = r.usedFallback ? 'badge-hybrid' : r.source === 'internal' ? 'badge-int' : 'badge-cf'
+  const formatted = mdToHtml(r.response || r.error || 'Sem resposta')
+
+  const el = document.createElement('div')
+  el.className = 'result-card glass rounded-2xl overflow-hidden'
+  el.innerHTML = \`
+    <div class="flex items-center gap-3 p-4" style="border-bottom:1px solid var(--border);background:linear-gradient(90deg,\${r.color}15,transparent)">
+      <span class="text-2xl">\${r.emoji}</span>
+      <div class="flex-1">
+        <div class="font-semibold text-white">\${r.name}</div>
+        <div class="text-xs" style="color:#6B7280">\${r.model?.split('/').pop()}</div>
       </div>
-    \`
+      <span class="badge \${sourceBadge}">\${sourceLabel}</span>
+      <span class="text-xs" style="color:#6B7280">\${(r.duration/1000).toFixed(1)}s</span>
+    </div>
+    <div class="p-5 text-sm leading-relaxed prose-sm" style="color:#D1D5DB">\${formatted}</div>
+  \`
+  container.appendChild(el)
+  el.scrollIntoView({behavior:'smooth', block:'nearest'})
+}
+
+// ── Chat
+function renderChatModels() {
+  const sel = document.getElementById('chat-model')
+  sel.innerHTML = models.map(m => \`<option class="model-opt" value="\${m.id}">\${m.label}</option>\`).join('')
+  sel.addEventListener('change', () => {
+    document.getElementById('chat-model-badge').textContent = models.find(m => m.id === sel.value)?.label || sel.value
   })
 
-  setPS(agentList[0], 'active')
+  const agentSel = document.getElementById('chat-agent')
+  agentSel.innerHTML = '<option value="">Nenhum (chat livre)</option>' +
+    agents.map(a => \`<option value="\${a.id}">\${a.emoji} \${a.name}</option>\`).join('')
+}
 
-  try {
-    const res = await fetch('/api/pipeline', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt, agents: agentList })
-    })
-    if (!res.ok) throw new Error('HTTP ' + res.status)
-    const data = await res.json()
+async function sendChat() {
+  const input = document.getElementById('chat-input')
+  const msg = input.value.trim()
+  if (!msg) return
 
-    data.results.forEach((r, i) => {
-      const rb = document.getElementById('rb-' + r.agentId)
-      const bdSrc = document.getElementById('bd-src-' + r.agentId)
-      const bdDur = document.getElementById('bd-dur-' + r.agentId)
-      const rcard = document.getElementById('rc-' + r.agentId)
-      const modelEl = rcard?.querySelector('.rmodel')
+  const agentId = document.getElementById('chat-agent').value
+  input.value = ''
+  input.style.height = 'auto'
 
-      if (rb) {
-        rb.classList.remove('loading')
-        rb.innerHTML = typeof marked !== 'undefined' ? marked.parse(r.response) : r.response.replace(/\\n/g,'<br/>')
-      }
-      if (bdDur) bdDur.textContent = (r.duration/1000).toFixed(1) + 's'
-      if (bdSrc) {
-        if (r.usedFallback) { bdSrc.textContent = '☁️ CF Fallback'; bdSrc.classList.add('badge-fb') }
-        else if (r.source === 'internal') { bdSrc.textContent = '🏠 Interno'; bdSrc.classList.add('badge-int') }
-        else { bdSrc.textContent = '☁️ CF AI'; bdSrc.classList.add('badge-cf') }
-      }
-      if (modelEl) modelEl.textContent = r.model.length > 40 ? r.model.slice(-38) : r.model
-      if (rcard) {
-        // add copy btn
-        const meta = rcard.querySelector('.rmeta')
-        if (meta) meta.innerHTML = (bdSrc?.outerHTML || '') + \`<span class="badge" style="font-family:'JetBrains Mono';">\${(r.duration/1000).toFixed(1)}s</span><button class="cbtn" onclick="copyTxt('rb-\${r.agentId}')"><i class="fas fa-copy"></i></button>\`
-        if (r.agentId === 'orchestrator') rcard.style.borderColor = 'rgba(34,211,238,.3)'
-      }
-
-      setPS(r.agentId, r.response.startsWith('❌') ? 'err' : 'done')
-      if (i + 1 < agentList.length) setPS(agentList[i+1], 'active')
-    })
-
-    // stats banner
-    const s = data.stats
-    stream.innerHTML += \`
-      <div style="background:rgba(52,211,153,.06);border:1px solid rgba(52,211,153,.2);border-radius:10px;padding:.85rem 1rem;display:flex;gap:1.5rem;flex-wrap:wrap;font-size:.78rem;color:var(--mut);">
-        <span>✅ <strong style="color:var(--g)">\${s.totalAgents}</strong> agentes</span>
-        <span>⏱️ <strong style="color:var(--txt)">\${(s.totalDurationMs/1000).toFixed(1)}s</strong> total</span>
-        <span>🏠 <strong style="color:var(--g)">\${s.internalCount}</strong> internos</span>
-        <span>☁️ <strong style="color:var(--a)">\${s.cloudflareCount}</strong> cloudflare</span>
-        \${s.fallbackCount > 0 ? '<span>🔄 <strong style="color:var(--v)">' + s.fallbackCount + '</strong> fallbacks</span>' : ''}
-      </div>
-    \`
-    toast('✅ Pipeline concluído!')
-  } catch(e) {
-    toast('❌ Erro: ' + e.message)
-    agentList.forEach(id => {
-      const rb = document.getElementById('rb-' + id)
-      if (rb?.classList.contains('loading')) {
-        rb.innerHTML = '❌ Erro ao executar agente'
-        rb.classList.remove('loading')
-        setPS(id, 'err')
-      }
-    })
+  // Se agente selecionado, usa /api/agent/:id
+  if (agentId) {
+    appendChatMsg('user', msg)
+    document.getElementById('typing-indicator').classList.remove('hidden')
+    try {
+      const res = await fetch('/api/agent/' + agentId, {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({message: msg})
+      })
+      const data = await res.json()
+      document.getElementById('typing-indicator').classList.add('hidden')
+      const agent = agents.find(a => a.id === agentId)
+      appendChatMsg('assistant', data.response || 'Sem resposta', agent?.name, agent?.emoji)
+    } catch(e) {
+      document.getElementById('typing-indicator').classList.add('hidden')
+      appendChatMsg('assistant', '❌ Erro: ' + e.message)
+    }
+    return
   }
 
-  running = false
-  btn.disabled = false
-  btn.innerHTML = '<i class="fas fa-play-circle"></i> Executar Pipeline'
-}
-
-function setPS(id, state) {
-  const el = document.getElementById('ps-' + id)
-  if (!el) return
-  el.className = 'prog-step ' + state
-  const si = el.querySelector('.si')
-  if (state === 'active' && si) si.innerHTML = '<span class="spin"></span>'
-  if (state === 'done' && si) { const a = AGENTS.find(x=>x.id===id); if(a) si.textContent = a.emoji }
-  if (state === 'err' && si) si.textContent = '❌'
-}
-
-// ── CHAT ───────────────────────────────────────────────────────────────────
-let chatHist = []
-async function sendChat() {
-  const ci = document.getElementById('cinput')
-  const msg = ci.value.trim()
-  if (!msg || document.getElementById('csend').disabled) return
-  ci.value = ''
-  autoH(ci)
-
+  // Chat livre com streaming SSE
   const model = document.getElementById('chat-model').value
-  chatHist.push({ role: 'user', content: msg })
-  addMsg('user', msg, null)
+  chatHistory.push({role: 'user', content: msg})
+  appendChatMsg('user', msg)
+  document.getElementById('typing-indicator').classList.remove('hidden')
+  document.getElementById('chat-send-btn').disabled = true
 
-  document.getElementById('csend').disabled = true
-  const lid = 'l' + Date.now()
-  const cm = document.getElementById('chat-msgs')
-  cm.innerHTML += \`<div class="msg" id="\${lid}"><div class="mav" style="background:rgba(108,99,255,.15);border:1px solid rgba(108,99,255,.3);">🤖</div><div><div class="mcont"><div class="lbar" style="width:100px;"></div></div></div></div>\`
-  cm.scrollTop = cm.scrollHeight
+  // Container para resposta streaming
+  const aiEl = document.createElement('div')
+  aiEl.className = 'msg-ai rounded-xl p-4 text-sm'
+  aiEl.innerHTML = '<div class="font-medium mb-1" style="color:#22D3EE">🤖 Assistente</div><div class="streaming-text"></div>'
+  document.getElementById('chat-messages').appendChild(aiEl)
+  const textEl = aiEl.querySelector('.streaming-text')
+  document.getElementById('chat-messages').scrollTop = 9999
 
+  let fullText = ''
   try {
     const res = await fetch('/api/chat', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ message: msg, model, history: chatHist.slice(-8) })
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({messages: [...chatHistory], model})
     })
-    const d = await res.json()
-    document.getElementById(lid)?.remove()
-    const resp = d.response || d.error || 'Sem resposta'
-    chatHist.push({ role: 'assistant', content: resp })
-    addMsg('ai', resp, d.model)
+    if (!res.body) throw new Error('Stream não disponível')
+    const reader = res.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+
+    while (true) {
+      const {done, value} = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, {stream: true})
+      const parts = buffer.split('\\n\\n')
+      buffer = parts.pop() || ''
+      for (const part of parts) {
+        for (const line of part.split('\\n')) {
+          if (!line.startsWith('data:')) continue
+          const data = line.slice(5).trim()
+          if (data === '[DONE]') continue
+          try {
+            const json = JSON.parse(data)
+            const chunk = json.response || json.choices?.[0]?.delta?.content || ''
+            if (chunk) {
+              fullText += chunk
+              textEl.innerHTML = mdToHtml(fullText) + '<span class="typing-cursor"></span>'
+              document.getElementById('chat-messages').scrollTop = 9999
+            }
+          } catch {}
+        }
+      }
+    }
+    textEl.innerHTML = mdToHtml(fullText)
+    chatHistory.push({role: 'assistant', content: fullText})
+    updateChatHistory()
   } catch(e) {
-    document.getElementById(lid)?.remove()
-    addMsg('ai', '❌ Erro: ' + e.message, null)
+    textEl.textContent = '❌ Erro: ' + e.message
   }
-  document.getElementById('csend').disabled = false
+
+  document.getElementById('typing-indicator').classList.add('hidden')
+  document.getElementById('chat-send-btn').disabled = false
 }
 
-function addMsg(role, txt, model) {
-  const cm = document.getElementById('chat-msgs')
-  const isU = role === 'user'
-  const html = !isU && typeof marked !== 'undefined' ? marked.parse(txt) : txt.replace(/\\n/g,'<br/>')
-  cm.innerHTML += \`
-    <div class="msg \${isU?'u':''}">
-      <div class="mav" style="\${isU?'background:rgba(34,211,238,.1);border:1px solid rgba(34,211,238,.25);':'background:rgba(108,99,255,.15);border:1px solid rgba(108,99,255,.3);'}">\${isU?'👤':'🤖'}</div>
-      <div>
-        <div class="mcont rbody">\${html}</div>
-        \${model ? \`<div class="mmod">\${model}</div>\` : ''}
-      </div>
-    </div>
-  \`
-  cm.scrollTop = cm.scrollHeight
+function appendChatMsg(role, text, name='Assistente', emoji='🤖') {
+  const el = document.createElement('div')
+  el.className = role === 'user' ? 'msg-user rounded-xl p-4 text-sm ml-8' : 'msg-ai rounded-xl p-4 text-sm'
+  if (role === 'user') {
+    el.innerHTML = \`<div class="font-medium mb-1" style="color:#a5b4fc">👤 Você</div><div>\${escHtml(text)}</div>\`
+  } else {
+    el.innerHTML = \`<div class="font-medium mb-1" style="color:#22D3EE">\${emoji} \${name}</div><div>\${mdToHtml(text)}</div>\`
+  }
+  document.getElementById('chat-messages').appendChild(el)
+  document.getElementById('chat-messages').scrollTop = 9999
+}
+
+function updateChatHistory() {
+  const list = document.getElementById('chat-history-list')
+  const userMsgs = chatHistory.filter(m => m.role === 'user')
+  if (!userMsgs.length) return
+  list.innerHTML = userMsgs.slice(-5).reverse().map(m =>
+    \`<div class="px-2 py-1.5 rounded-lg hover:bg-white/5 cursor-pointer truncate">\${m.content.slice(0,35)}...</div>\`
+  ).join('')
 }
 
 function clearChat() {
-  chatHist = []
-  document.getElementById('chat-msgs').innerHTML = \`<div class="msg"><div class="mav" style="background:rgba(108,99,255,.15);border:1px solid rgba(108,99,255,.3);">🤖</div><div><div class="mcont">Chat limpo. Como posso ajudar? 🚀</div></div></div>\`
+  chatHistory = []
+  document.getElementById('chat-messages').innerHTML = \`
+    <div class="msg-ai rounded-xl p-4 text-sm">
+      <div class="font-medium text-cyan-400 mb-1">🤖 Assistente SixTech</div>
+      <div>Olá! Como posso ajudar?</div>
+    </div>\`
+  document.getElementById('chat-history-list').innerHTML = '<div class="text-center py-4">Nenhuma conversa</div>'
 }
 
-// ── STATUS ─────────────────────────────────────────────────────────────────
+// ── Agents Grid
+function renderAgentsGrid(filtered = null) {
+  const list = filtered || allAgents
+  document.getElementById('agents-grid').innerHTML = list.map(a => \`
+    <div class="agent-card glass rounded-2xl overflow-hidden">
+      <div class="p-5" style="border-bottom:1px solid var(--border);background:linear-gradient(135deg,\${a.color}20,transparent)">
+        <div class="flex items-start justify-between mb-3">
+          <div class="flex items-center gap-3">
+            <span class="text-3xl">\${a.emoji}</span>
+            <div>
+              <div class="font-bold text-white">\${a.name}</div>
+              <div class="text-xs" style="color:#6B7280">\${a.category}</div>
+            </div>
+          </div>
+          <span class="badge \${a.source === 'hybrid' ? 'badge-hybrid' : 'badge-cf'}">\${a.source}</span>
+        </div>
+        <p class="text-xs leading-relaxed" style="color:#9CA3AF">\${a.desc}</p>
+      </div>
+      <div class="p-4">
+        <div class="mb-3">
+          <div class="text-xs font-medium mb-2" style="color:#6B7280">CAPACIDADES</div>
+          <div class="flex flex-wrap gap-1">
+            \${(a.capabilities||[]).map(c => \`<span class="cap-pill">\${c}</span>\`).join('')}
+          </div>
+        </div>
+        \${a.basedOn ? \`<div class="text-xs mb-3" style="color:#6B7280">📦 Baseado em: <span style="color:#a5b4fc">\${a.basedOn}</span></div>\` : ''}
+        <div class="text-xs mb-3" style="color:#6B7280">🤖 Modelo: <span style="color:#22D3EE">\${a.model?.split('/').pop()}</span></div>
+        <button onclick="testAgent('\${a.id}')"
+          class="w-full py-2 rounded-xl text-xs font-semibold"
+          style="background:rgba(108,99,255,.2);border:1px solid rgba(108,99,255,.4);color:#a5b4fc">
+          <i class="fas fa-flask mr-1"></i>Testar Agente
+        </button>
+      </div>
+    </div>
+  \`).join('')
+}
+
+function filterAgents(q) {
+  const filtered = allAgents.filter(a =>
+    a.name.toLowerCase().includes(q.toLowerCase()) ||
+    a.desc.toLowerCase().includes(q.toLowerCase()) ||
+    a.category.toLowerCase().includes(q.toLowerCase())
+  )
+  renderAgentsGrid(filtered)
+}
+
+function filterBySource(src) {
+  document.querySelectorAll('.filter-btn').forEach(b => {
+    b.style.background = 'var(--card)'; b.style.color = 'var(--muted)'
+  })
+  event.currentTarget.style.background = 'var(--primary)'
+  event.currentTarget.style.color = 'white'
+  renderAgentsGrid(src === 'all' ? allAgents : allAgents.filter(a => a.source === src))
+}
+
+async function testAgent(id) {
+  const task = prompt('Teste o agente — digite uma tarefa:')
+  if (!task) return
+  showTab('pipeline')
+  setTimeout(() => {
+    document.getElementById('pipeline-task').value = task
+    document.querySelectorAll('.agent-checkbox').forEach(cb => cb.checked = cb.value === id)
+    updateAgentCount()
+    runPipeline()
+  }, 100)
+}
+
+// ── Status
 async function loadStatus() {
-  const grid = document.getElementById('sp-grid')
-  grid.innerHTML = '<div class="scard"><h4><i class="fas fa-circle-notch fa-spin" style="color:var(--p);"></i> Verificando...</h4></div>'
-  
   try {
-    const r = await fetch('/api/status')
-    const d = await r.json()
-    
-    const cfOk = d.providers?.cloudflare_ai === 'healthy'
-    
-    grid.innerHTML = \`
-      <div class="scard">
-        <h4><i class="fas fa-globe" style="color:var(--p);"></i> Plataforma</h4>
-        <div class="sval ok">\${d.status?.toUpperCase()}</div>
-        <div class="slabel">v\${d.version} · \${d.agents} agentes</div>
+    const res = await fetch('/api/status')
+    const data = await res.json()
+    const container = document.getElementById('status-details')
+    container.innerHTML = \`
+      <div class="glass rounded-2xl p-5">
+        <h3 class="font-semibold text-white mb-4"><i class="fas fa-code-branch mr-2" style="color:var(--primary)"></i>Repositórios Integrados</h3>
+        <div class="space-y-3">
+          \${Object.entries(data.repos).map(([name, info]) => \`
+            <div class="flex items-start gap-3 p-3 rounded-xl" style="background:var(--bg);border:1px solid var(--border)">
+              <span class="text-green-400 mt-0.5">●</span>
+              <div>
+                <div class="font-medium text-white text-sm">\${name}</div>
+                <div class="text-xs mt-1" style="color:#6B7280">\${info.type}</div>
+                \${info.url ? \`<a href="\${info.url}" target="_blank" class="text-xs" style="color:#6C63FF">\${info.url}</a>\` : ''}
+                \${info.note ? \`<div class="text-xs mt-1" style="color:#F59E0B">\${info.note}</div>\` : ''}
+              </div>
+            </div>
+          \`).join('')}
+        </div>
       </div>
-      <div class="scard">
-        <h4><i class="fas fa-cloud" style="color:var(--a);"></i> Cloudflare Workers AI</h4>
-        <div class="sval \${cfOk?'ok':'err'}">\${cfOk?'HEALTHY':'DEGRADED'}</div>
-        <div class="slabel">\${d.models_available} modelos disponíveis</div>
-      </div>
-      <div class="scard">
-        <h4><i class="fas fa-server" style="color:var(--g);"></i> Backend Interno</h4>
-        <div class="sval warn">STANDBY</div>
-        <div class="slabel">sixtech-workspace · fallback automático</div>
-      </div>
-      <div class="scard">
-        <h4><i class="fas fa-users-cog" style="color:var(--v);"></i> Agentes</h4>
-        <div class="sval ok">\${d.agents}</div>
-        <div class="slabel">5 workspace · 3 cloudflare</div>
-      </div>
-    \`
-    
-    document.getElementById('sp-detail').innerHTML = \`
-      <div class="card" style="margin-top:1rem;">
-        <div class="card-title"><i class="fas fa-robot" style="color:var(--c);"></i> Modelos Cloudflare Workers AI</div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:.5rem;margin-top:.5rem;">
-          \${[
-            ['⚡','Llama 3.2 3B','Rápido (fast)'],
-            ['⚖️','Llama 3.1 8B FP8','Balanceado'],
-            ['💪','Llama 3.3 70B FP8','Poderoso'],
-            ['💻','Qwen 2.5 Coder 32B','Código'],
-            ['🧠','DeepSeek R1 32B','Raciocínio'],
-            ['🌙','Kimi K2.6 1T','Orquestrador'],
-            ['🔷','GPT-OSS 120B','Premium'],
-            ['💎','Gemma 2B LoRA','Leve'],
-          ].map(([e,n,r]) => \`<div style="background:var(--bg4);border:1px solid var(--b);border-radius:8px;padding:.6rem .8rem;font-size:.78rem;"><span style="margin-right:.4rem;">\${e}</span><strong>\${n}</strong><br/><span style="color:var(--mut);font-size:.7rem;">\${r}</span></div>\`).join('')}
+      <div class="glass rounded-2xl p-5">
+        <h3 class="font-semibold text-white mb-4"><i class="fas fa-server mr-2" style="color:var(--secondary)"></i>Funcionalidades</h3>
+        <div class="space-y-2">
+          \${data.features.map(f => \`
+            <div class="flex items-center gap-3 p-2.5 rounded-xl" style="background:var(--bg)">
+              <i class="fas fa-check-circle text-emerald-400"></i>
+              <span class="text-sm text-white">\${f}</span>
+            </div>
+          \`).join('')}
+        </div>
+        <div class="mt-4 p-3 rounded-xl text-xs" style="background:rgba(108,99,255,.1);border:1px solid rgba(108,99,255,.3);color:#a5b4fc">
+          <i class="fas fa-info-circle mr-2"></i>
+          Plataforma hospedada no Cloudflare Pages Edge — latência global < 50ms
         </div>
       </div>
     \`
-    
-    toast('✅ Status atualizado!')
+    document.getElementById('stat-agents').textContent = data.agents
+    document.getElementById('stat-models').textContent = data.models
   } catch(e) {
-    grid.innerHTML = '<div class="scard"><h4 style="color:var(--r);">❌ Erro ao carregar status</h4><p style="font-size:.78rem;color:var(--mut);">' + e.message + '</p></div>'
+    document.getElementById('status-text').textContent = 'Verificando...'
   }
 }
 
-// ── TEST AGENT ─────────────────────────────────────────────────────────────
-async function testAgent(id) {
-  const demos = {
-    developer: 'Crie uma função TypeScript para validar CPF brasileiro com testes unitários.',
-    research: 'Pesquise as 5 principais tendências de IA generativa para empresas em 2025.',
-    legal: 'Elabore uma cláusula de confidencialidade (NDA) para contratos de software.',
-    designer: 'Crie um guia de identidade visual para uma startup de IA: cores, tipografia e tom.',
-    documents: 'Crie um modelo de relatório mensal de performance de equipe de TI.',
-    analyst: 'Faça uma análise SWOT do mercado de ferramentas de IA generativa para PMEs.',
-    reviewer: 'Revise: "Nossa IA é muito boa. Ela faz tudo. Os clientes adoram muito. É top demais."',
-    orchestrator: 'Monte um plano estratégico de 90 dias para adoção de IA em uma empresa de 50 pessoas.'
-  }
-  showTab('pipeline')
-  document.getElementById('pp-prompt').value = demos[id] || 'Olá! Apresente-se.'
-  selected = new Set([id])
-  renderCheckboxes()
-  updateSelCnt()
-  await runPipeline()
+// ── Utils
+function clearAll() {
+  document.getElementById('pipeline-task').value = ''
+  document.querySelectorAll('.agent-checkbox').forEach(cb => cb.checked = false)
+  updateAgentCount()
+  document.getElementById('results-container').innerHTML = \`
+    <div id="results-placeholder" class="glass rounded-2xl p-12 text-center">
+      <div class="text-5xl mb-4">🤖</div>
+      <div class="text-white font-medium mb-2">Pronto para executar</div>
+      <div class="text-sm" style="color:var(--muted)">Configure a tarefa, selecione os agentes e clique em Executar</div>
+    </div>\`
+  document.getElementById('progress-bar').classList.add('hidden')
 }
 
-// ── UTILS ──────────────────────────────────────────────────────────────────
-function copyTxt(id) {
-  const el = document.getElementById(id)
-  if (el) { navigator.clipboard.writeText(el.innerText); toast('📋 Copiado!') }
+function escHtml(t) {
+  return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
 }
 
-function toast(msg) {
-  const t = document.createElement('div')
-  t.className = 'toast'; t.textContent = msg
-  document.body.appendChild(t)
-  setTimeout(() => t.remove(), 3000)
+function mdToHtml(md) {
+  if (!md) return ''
+  return md
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/\`\`\`(\\w*)?\\n?([\\s\\S]*?)\`\`\`/g, (_,lang,code) =>
+      \`<pre style="background:#0d0d1a;border:1px solid #2A2D40;border-radius:8px;padding:12px;overflow-x:auto;margin:8px 0"><code class="language-\${lang||'text'}" style="color:#e2e8f0;font-family:monospace">\${code.trim()}</code></pre>\`)
+    .replace(/\`([^\`]+)\`/g, '<code style="background:#1e2030;padding:2px 6px;border-radius:4px;color:#f472b6;font-family:monospace">$1</code>')
+    .replace(/\\*\\*([^*]+)\\*\\*/g, '<strong style="color:white">$1</strong>')
+    .replace(/\\*([^*]+)\\*/g, '<em>$1</em>')
+    .replace(/^### (.+)$/gm, '<h3 style="color:#22D3EE;font-size:1rem;font-weight:600;margin:12px 0 6px">$1</h3>')
+    .replace(/^## (.+)$/gm, '<h2 style="color:#a5b4fc;font-size:1.1rem;font-weight:700;margin:16px 0 8px">$1</h2>')
+    .replace(/^# (.+)$/gm, '<h1 style="color:white;font-size:1.25rem;font-weight:800;margin:16px 0 8px">$1</h1>')
+    .replace(/^[-*] (.+)$/gm, '<li style="margin:3px 0;padding-left:4px">• $1</li>')
+    .replace(/^(\\d+)\\. (.+)$/gm, '<li style="margin:3px 0;padding-left:4px">$1. $2</li>')
+    .replace(/^> (.+)$/gm, '<blockquote style="border-left:3px solid #6C63FF;padding-left:12px;color:#9CA3AF;margin:8px 0">$1</blockquote>')
+    .replace(/\\n/g, '<br>')
 }
 
-function autoH(el) {
-  el.style.height = 'auto'
-  el.style.height = Math.min(el.scrollHeight, 130) + 'px'
-}
-
-document.addEventListener('DOMContentLoaded', () => {
-  const ci = document.getElementById('cinput')
-  if (ci) {
-    ci.addEventListener('keydown', e => { if (e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendChat()} })
-    ci.addEventListener('input', () => autoH(ci))
-  }
-  init()
-})
+// Inicializar
+init()
 </script>
 </body>
-</html>`
-}
+</html>`)
+})
 
 export default app
