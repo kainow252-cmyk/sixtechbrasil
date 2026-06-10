@@ -1,862 +1,605 @@
-var St=Object.defineProperty;var Ke=t=>{throw TypeError(t)};var Ct=(t,e,s)=>e in t?St(t,e,{enumerable:!0,configurable:!0,writable:!0,value:s}):t[e]=s;var h=(t,e,s)=>Ct(t,typeof e!="symbol"?e+"":e,s),Fe=(t,e,s)=>e.has(t)||Ke("Cannot "+s);var n=(t,e,s)=>(Fe(t,e,"read from private field"),s?s.call(t):e.get(t)),f=(t,e,s)=>e.has(t)?Ke("Cannot add the same private member more than once"):e instanceof WeakSet?e.add(t):e.set(t,s),m=(t,e,s,a)=>(Fe(t,e,"write to private field"),a?a.call(t,s):e.set(t,s),s),v=(t,e,s)=>(Fe(t,e,"access private method"),s);var Je=(t,e,s,a)=>({set _(r){m(t,e,r,s)},get _(){return n(t,e,a)}});var Qe=(t,e,s)=>(a,r)=>{let o=-1;return i(0);async function i(c){if(c<=o)throw new Error("next() called multiple times");o=c;let l,d=!1,u;if(t[c]?(u=t[c][0][0],a.req.routeIndex=c):u=c===t.length&&r||void 0,u)try{l=await u(a,()=>i(c+1))}catch(p){if(p instanceof Error&&e)a.error=p,l=await e(p,a),d=!0;else throw p}else a.finalized===!1&&s&&(l=await s(a));return l&&(a.finalized===!1||d)&&(a.res=l),a}},Rt=Symbol(),Tt=async(t,e=Object.create(null))=>{const{all:s=!1,dot:a=!1}=e,o=(t instanceof pt?t.raw.headers:t.headers).get("Content-Type");return o!=null&&o.startsWith("multipart/form-data")||o!=null&&o.startsWith("application/x-www-form-urlencoded")?jt(t,{all:s,dot:a}):{}};async function jt(t,e){const s=await t.formData();return s?It(s,e):{}}function It(t,e){const s=Object.create(null);return t.forEach((a,r)=>{e.all||r.endsWith("[]")?Pt(s,r,a):s[r]=a}),e.dot&&Object.entries(s).forEach(([a,r])=>{a.includes(".")&&(Ot(s,a,r),delete s[a])}),s}var Pt=(t,e,s)=>{t[e]!==void 0?Array.isArray(t[e])?t[e].push(s):t[e]=[t[e],s]:e.endsWith("[]")?t[e]=[s]:t[e]=s},Ot=(t,e,s)=>{if(/(?:^|\.)__proto__\./.test(e))return;let a=t;const r=e.split(".");r.forEach((o,i)=>{i===r.length-1?a[o]=s:((!a[o]||typeof a[o]!="object"||Array.isArray(a[o])||a[o]instanceof File)&&(a[o]=Object.create(null)),a=a[o])})},it=t=>{const e=t.split("/");return e[0]===""&&e.shift(),e},$t=t=>{const{groups:e,path:s}=Bt(t),a=it(s);return Dt(a,e)},Bt=t=>{const e=[];return t=t.replace(/\{[^}]+\}/g,(s,a)=>{const r=`@${a}`;return e.push([r,s]),r}),{groups:e,path:t}},Dt=(t,e)=>{for(let s=e.length-1;s>=0;s--){const[a]=e[s];for(let r=t.length-1;r>=0;r--)if(t[r].includes(a)){t[r]=t[r].replace(a,e[s][1]);break}}return t},Pe={},Lt=(t,e)=>{if(t==="*")return"*";const s=t.match(/^\:([^\{\}]+)(?:\{(.+)\})?$/);if(s){const a=`${t}#${e}`;return Pe[a]||(s[2]?Pe[a]=e&&e[0]!==":"&&e[0]!=="*"?[a,s[1],new RegExp(`^${s[2]}(?=/${e})`)]:[t,s[1],new RegExp(`^${s[2]}$`)]:Pe[a]=[t,s[1],!0]),Pe[a]}return null},Ve=(t,e)=>{try{return e(t)}catch{return t.replace(/(?:%[0-9A-Fa-f]{2})+/g,s=>{try{return e(s)}catch{return s}})}},Ht=t=>Ve(t,decodeURI),lt=t=>{const e=t.url,s=e.indexOf("/",e.indexOf(":")+4);let a=s;for(;a<e.length;a++){const r=e.charCodeAt(a);if(r===37){const o=e.indexOf("?",a),i=e.indexOf("#",a),c=o===-1?i===-1?void 0:i:i===-1?o:Math.min(o,i),l=e.slice(s,c);return Ht(l.includes("%25")?l.replace(/%25/g,"%2525"):l)}else if(r===63||r===35)break}return e.slice(s,a)},Mt=t=>{const e=lt(t);return e.length>1&&e.at(-1)==="/"?e.slice(0,-1):e},J=(t,e,...s)=>(s.length&&(e=J(e,...s)),`${(t==null?void 0:t[0])==="/"?"":"/"}${t}${e==="/"?"":`${(t==null?void 0:t.at(-1))==="/"?"":"/"}${(e==null?void 0:e[0])==="/"?e.slice(1):e}`}`),ct=t=>{if(t.charCodeAt(t.length-1)!==63||!t.includes(":"))return null;const e=t.split("/"),s=[];let a="";return e.forEach(r=>{if(r!==""&&!/\:/.test(r))a+="/"+r;else if(/\:/.test(r))if(/\?/.test(r)){s.length===0&&a===""?s.push("/"):s.push(a);const o=r.replace("?","");a+="/"+o,s.push(a)}else a+="/"+r}),s.filter((r,o,i)=>i.indexOf(r)===o)},Ne=t=>/[%+]/.test(t)?(t.indexOf("+")!==-1&&(t=t.replace(/\+/g," ")),t.indexOf("%")!==-1?Ve(t,ut):t):t,dt=(t,e,s)=>{let a;if(!s&&e&&!/[%+]/.test(e)){let i=t.indexOf("?",8);if(i===-1)return;for(t.startsWith(e,i+1)||(i=t.indexOf(`&${e}`,i+1));i!==-1;){const c=t.charCodeAt(i+e.length+1);if(c===61){const l=i+e.length+2,d=t.indexOf("&",l);return Ne(t.slice(l,d===-1?void 0:d))}else if(c==38||isNaN(c))return"";i=t.indexOf(`&${e}`,i+1)}if(a=/[%+]/.test(t),!a)return}const r={};a??(a=/[%+]/.test(t));let o=t.indexOf("?",8);for(;o!==-1;){const i=t.indexOf("&",o+1);let c=t.indexOf("=",o);c>i&&i!==-1&&(c=-1);let l=t.slice(o+1,c===-1?i===-1?void 0:i:c);if(a&&(l=Ne(l)),o=i,l==="")continue;let d;c===-1?d="":(d=t.slice(c+1,i===-1?void 0:i),a&&(d=Ne(d))),s?(r[l]&&Array.isArray(r[l])||(r[l]=[]),r[l].push(d)):r[l]??(r[l]=d)}return e?r[e]:r},qt=dt,Ft=(t,e)=>dt(t,e,!0),ut=decodeURIComponent,Xe=t=>Ve(t,ut),de,R,_,mt,ht,Ue,H,tt,pt=(tt=class{constructor(t,e="/",s=[[]]){f(this,_);h(this,"raw");f(this,de);f(this,R);h(this,"routeIndex",0);h(this,"path");h(this,"bodyCache",{});f(this,H,t=>{const{bodyCache:e,raw:s}=this,a=e[t];if(a)return a;const r=Object.keys(e)[0];return r?e[r].then(o=>(r==="json"&&(o=JSON.stringify(o)),new Response(o)[t]())):e[t]=s[t]()});this.raw=t,this.path=e,m(this,R,s),m(this,de,{})}param(t){return t?v(this,_,mt).call(this,t):v(this,_,ht).call(this)}query(t){return qt(this.url,t)}queries(t){return Ft(this.url,t)}header(t){if(t)return this.raw.headers.get(t)??void 0;const e={};return this.raw.headers.forEach((s,a)=>{e[a]=s}),e}async parseBody(t){return Tt(this,t)}json(){return n(this,H).call(this,"text").then(t=>JSON.parse(t))}text(){return n(this,H).call(this,"text")}arrayBuffer(){return n(this,H).call(this,"arrayBuffer")}bytes(){return n(this,H).call(this,"arrayBuffer").then(t=>new Uint8Array(t))}blob(){return n(this,H).call(this,"blob")}formData(){return n(this,H).call(this,"formData")}addValidatedData(t,e){n(this,de)[t]=e}valid(t){return n(this,de)[t]}get url(){return this.raw.url}get method(){return this.raw.method}get[Rt](){return n(this,R)}get matchedRoutes(){return n(this,R)[0].map(([[,t]])=>t)}get routePath(){return n(this,R)[0].map(([[,t]])=>t)[this.routeIndex].path}},de=new WeakMap,R=new WeakMap,_=new WeakSet,mt=function(t){const e=n(this,R)[0][this.routeIndex][1][t],s=v(this,_,Ue).call(this,e);return s&&/\%/.test(s)?Xe(s):s},ht=function(){const t={},e=Object.keys(n(this,R)[0][this.routeIndex][1]);for(const s of e){const a=v(this,_,Ue).call(this,n(this,R)[0][this.routeIndex][1][s]);a!==void 0&&(t[s]=/\%/.test(a)?Xe(a):a)}return t},Ue=function(t){return n(this,R)[1]?n(this,R)[1][t]:t},H=new WeakMap,tt),Nt={Stringify:1},ft=async(t,e,s,a,r)=>{typeof t=="object"&&!(t instanceof String)&&(t instanceof Promise||(t=t.toString()),t instanceof Promise&&(t=await t));const o=t.callbacks;return o!=null&&o.length?(r?r[0]+=t:r=[t],Promise.all(o.map(c=>c({phase:e,buffer:r,context:a}))).then(c=>Promise.all(c.filter(Boolean).map(l=>ft(l,e,!1,a,r))).then(()=>r[0]))):Promise.resolve(t)},_t="text/plain; charset=UTF-8",_e=(t,e)=>({"Content-Type":t,...e}),we=(t,e)=>new Response(t,e),Se,Ce,M,ue,q,S,Re,pe,me,Y,Te,je,V,ie,st,Ut=(st=class{constructor(t,e){f(this,V);f(this,Se);f(this,Ce);h(this,"env",{});f(this,M);h(this,"finalized",!1);h(this,"error");f(this,ue);f(this,q);f(this,S);f(this,Re);f(this,pe);f(this,me);f(this,Y);f(this,Te);f(this,je);h(this,"render",(...t)=>(n(this,pe)??m(this,pe,e=>this.html(e)),n(this,pe).call(this,...t)));h(this,"setLayout",t=>m(this,Re,t));h(this,"getLayout",()=>n(this,Re));h(this,"setRenderer",t=>{m(this,pe,t)});h(this,"header",(t,e,s)=>{this.finalized&&m(this,S,we(n(this,S).body,n(this,S)));const a=n(this,S)?n(this,S).headers:n(this,Y)??m(this,Y,new Headers);e===void 0?a.delete(t):s!=null&&s.append?a.append(t,e):a.set(t,e)});h(this,"status",t=>{m(this,ue,t)});h(this,"set",(t,e)=>{n(this,M)??m(this,M,new Map),n(this,M).set(t,e)});h(this,"get",t=>n(this,M)?n(this,M).get(t):void 0);h(this,"newResponse",(...t)=>v(this,V,ie).call(this,...t));h(this,"body",(t,e,s)=>v(this,V,ie).call(this,t,e,s));h(this,"text",(t,e,s)=>!n(this,Y)&&!n(this,ue)&&!e&&!s&&!this.finalized?new Response(t):v(this,V,ie).call(this,t,e,_e(_t,s)));h(this,"json",(t,e,s)=>v(this,V,ie).call(this,JSON.stringify(t),e,_e("application/json",s)));h(this,"html",(t,e,s)=>{const a=r=>v(this,V,ie).call(this,r,e,_e("text/html; charset=UTF-8",s));return typeof t=="object"?ft(t,Nt.Stringify,!1,{}).then(a):a(t)});h(this,"redirect",(t,e)=>{const s=String(t);return this.header("Location",/[^\x00-\xFF]/.test(s)?encodeURI(s):s),this.newResponse(null,e??302)});h(this,"notFound",()=>(n(this,me)??m(this,me,()=>we()),n(this,me).call(this,this)));m(this,Se,t),e&&(m(this,q,e.executionCtx),this.env=e.env,m(this,me,e.notFoundHandler),m(this,je,e.path),m(this,Te,e.matchResult))}get req(){return n(this,Ce)??m(this,Ce,new pt(n(this,Se),n(this,je),n(this,Te))),n(this,Ce)}get event(){if(n(this,q)&&"respondWith"in n(this,q))return n(this,q);throw Error("This context has no FetchEvent")}get executionCtx(){if(n(this,q))return n(this,q);throw Error("This context has no ExecutionContext")}get res(){return n(this,S)||m(this,S,we(null,{headers:n(this,Y)??m(this,Y,new Headers)}))}set res(t){if(n(this,S)&&t){t=we(t.body,t);for(const[e,s]of n(this,S).headers.entries())if(e!=="content-type")if(e==="set-cookie"){const a=n(this,S).headers.getSetCookie();t.headers.delete("set-cookie");for(const r of a)t.headers.append("set-cookie",r)}else t.headers.set(e,s)}m(this,S,t),this.finalized=!0}get var(){return n(this,M)?Object.fromEntries(n(this,M)):{}}},Se=new WeakMap,Ce=new WeakMap,M=new WeakMap,ue=new WeakMap,q=new WeakMap,S=new WeakMap,Re=new WeakMap,pe=new WeakMap,me=new WeakMap,Y=new WeakMap,Te=new WeakMap,je=new WeakMap,V=new WeakSet,ie=function(t,e,s){const a=n(this,S)?new Headers(n(this,S).headers):n(this,Y)??new Headers;if(typeof e=="object"&&"headers"in e){const o=e.headers instanceof Headers?e.headers:new Headers(e.headers);for(const[i,c]of o)i.toLowerCase()==="set-cookie"?a.append(i,c):a.set(i,c)}if(s)for(const[o,i]of Object.entries(s))if(typeof i=="string")a.set(o,i);else{a.delete(o);for(const c of i)a.append(o,c)}const r=typeof e=="number"?e:(e==null?void 0:e.status)??n(this,ue);return we(t,{status:r,headers:a})},st),x="ALL",Vt="all",zt=["get","post","put","delete","options","patch"],gt="Can not add a route since the matcher is already built.",vt=class extends Error{},Gt="__COMPOSED_HANDLER",Wt=t=>t.text("404 Not Found",404),Ye=(t,e)=>{if("getResponse"in t){const s=t.getResponse();return e.newResponse(s.body,s)}return console.error(t),e.text("Internal Server Error",500)},j,y,bt,I,Q,Oe,$e,he,Kt=(he=class{constructor(e={}){f(this,y);h(this,"get");h(this,"post");h(this,"put");h(this,"delete");h(this,"options");h(this,"patch");h(this,"all");h(this,"on");h(this,"use");h(this,"router");h(this,"getPath");h(this,"_basePath","/");f(this,j,"/");h(this,"routes",[]);f(this,I,Wt);h(this,"errorHandler",Ye);h(this,"onError",e=>(this.errorHandler=e,this));h(this,"notFound",e=>(m(this,I,e),this));h(this,"fetch",(e,...s)=>v(this,y,$e).call(this,e,s[1],s[0],e.method));h(this,"request",(e,s,a,r)=>e instanceof Request?this.fetch(s?new Request(e,s):e,a,r):(e=e.toString(),this.fetch(new Request(/^https?:\/\//.test(e)?e:`http://localhost${J("/",e)}`,s),a,r)));h(this,"fire",()=>{addEventListener("fetch",e=>{e.respondWith(v(this,y,$e).call(this,e.request,e,void 0,e.request.method))})});[...zt,Vt].forEach(o=>{this[o]=(i,...c)=>(typeof i=="string"?m(this,j,i):v(this,y,Q).call(this,o,n(this,j),i),c.forEach(l=>{v(this,y,Q).call(this,o,n(this,j),l)}),this)}),this.on=(o,i,...c)=>{for(const l of[i].flat()){m(this,j,l);for(const d of[o].flat())c.map(u=>{v(this,y,Q).call(this,d.toUpperCase(),n(this,j),u)})}return this},this.use=(o,...i)=>(typeof o=="string"?m(this,j,o):(m(this,j,"*"),i.unshift(o)),i.forEach(c=>{v(this,y,Q).call(this,x,n(this,j),c)}),this);const{strict:a,...r}=e;Object.assign(this,r),this.getPath=a??!0?e.getPath??lt:Mt}route(e,s){const a=this.basePath(e);return s.routes.map(r=>{var i;let o;s.errorHandler===Ye?o=r.handler:(o=async(c,l)=>(await Qe([],s.errorHandler)(c,()=>r.handler(c,l))).res,o[Gt]=r.handler),v(i=a,y,Q).call(i,r.method,r.path,o,r.basePath)}),this}basePath(e){const s=v(this,y,bt).call(this);return s._basePath=J(this._basePath,e),s}mount(e,s,a){let r,o;a&&(typeof a=="function"?o=a:(o=a.optionHandler,a.replaceRequest===!1?r=l=>l:r=a.replaceRequest));const i=o?l=>{const d=o(l);return Array.isArray(d)?d:[d]}:l=>{let d;try{d=l.executionCtx}catch{}return[l.env,d]};r||(r=(()=>{const l=J(this._basePath,e),d=l==="/"?0:l.length;return u=>{const p=new URL(u.url);return p.pathname=this.getPath(u).slice(d)||"/",new Request(p,u)}})());const c=async(l,d)=>{const u=await s(r(l.req.raw),...i(l));if(u)return u;await d()};return v(this,y,Q).call(this,x,J(e,"*"),c),this}},j=new WeakMap,y=new WeakSet,bt=function(){const e=new he({router:this.router,getPath:this.getPath});return e.errorHandler=this.errorHandler,m(e,I,n(this,I)),e.routes=this.routes,e},I=new WeakMap,Q=function(e,s,a,r){e=e.toUpperCase(),s=J(this._basePath,s);const o={basePath:r!==void 0?J(this._basePath,r):this._basePath,path:s,method:e,handler:a};this.router.add(e,s,[a,o]),this.routes.push(o)},Oe=function(e,s){if(e instanceof Error)return this.errorHandler(e,s);throw e},$e=function(e,s,a,r){if(r==="HEAD")return(async()=>new Response(null,await v(this,y,$e).call(this,e,s,a,"GET")))();const o=this.getPath(e,{env:a}),i=this.router.match(r,o),c=new Ut(e,{path:o,matchResult:i,env:a,executionCtx:s,notFoundHandler:n(this,I)});if(i[0].length===1){let d;try{d=i[0][0][0][0](c,async()=>{c.res=await n(this,I).call(this,c)})}catch(u){return v(this,y,Oe).call(this,u,c)}return d instanceof Promise?d.then(u=>u||(c.finalized?c.res:n(this,I).call(this,c))).catch(u=>v(this,y,Oe).call(this,u,c)):d??n(this,I).call(this,c)}const l=Qe(i[0],this.errorHandler,n(this,I));return(async()=>{try{const d=await l(c);if(!d.finalized)throw new Error("Context is not finalized. Did you forget to return a Response object or `await next()`?");return d.res}catch(d){return v(this,y,Oe).call(this,d,c)}})()},he),xt=[];function Jt(t,e){const s=this.buildAllMatchers(),a=(r,o)=>{const i=s[r]||s[x],c=i[2][o];if(c)return c;const l=o.match(i[0]);if(!l)return[[],xt];const d=l.indexOf("",1);return[i[1][d],l]};return this.match=a,a(t,e)}var De="[^/]+",Ae=".*",ke="(?:|/.*)",le=Symbol(),Qt=new Set(".\\+*[^]$()");function Xt(t,e){return t.length===1?e.length===1?t<e?-1:1:-1:e.length===1||t===Ae||t===ke?1:e===Ae||e===ke?-1:t===De?1:e===De?-1:t.length===e.length?t<e?-1:1:e.length-t.length}var Z,ee,P,ae,Yt=(ae=class{constructor(){f(this,Z);f(this,ee);f(this,P,Object.create(null))}insert(e,s,a,r,o){if(e.length===0){if(n(this,Z)!==void 0)throw le;if(o)return;m(this,Z,s);return}const[i,...c]=e,l=i==="*"?c.length===0?["","",Ae]:["","",De]:i==="/*"?["","",ke]:i.match(/^\:([^\{\}]+)(?:\{(.+)\})?$/);let d;if(l){const u=l[1];let p=l[2]||De;if(u&&l[2]&&(p===".*"||(p=p.replace(/^\((?!\?:)(?=[^)]+\)$)/,"(?:"),/\((?!\?:)/.test(p))))throw le;if(d=n(this,P)[p],!d){if(Object.keys(n(this,P)).some(g=>g!==Ae&&g!==ke))throw le;if(o)return;d=n(this,P)[p]=new ae,u!==""&&m(d,ee,r.varIndex++)}!o&&u!==""&&a.push([u,n(d,ee)])}else if(d=n(this,P)[i],!d){if(Object.keys(n(this,P)).some(u=>u.length>1&&u!==Ae&&u!==ke))throw le;if(o)return;d=n(this,P)[i]=new ae}d.insert(c,s,a,r,o)}buildRegExpStr(){const s=Object.keys(n(this,P)).sort(Xt).map(a=>{const r=n(this,P)[a];return(typeof n(r,ee)=="number"?`(${a})@${n(r,ee)}`:Qt.has(a)?`\\${a}`:a)+r.buildRegExpStr()});return typeof n(this,Z)=="number"&&s.unshift(`#${n(this,Z)}`),s.length===0?"":s.length===1?s[0]:"(?:"+s.join("|")+")"}},Z=new WeakMap,ee=new WeakMap,P=new WeakMap,ae),Le,Ie,at,Zt=(at=class{constructor(){f(this,Le,{varIndex:0});f(this,Ie,new Yt)}insert(t,e,s){const a=[],r=[];for(let i=0;;){let c=!1;if(t=t.replace(/\{[^}]+\}/g,l=>{const d=`@\\${i}`;return r[i]=[d,l],i++,c=!0,d}),!c)break}const o=t.match(/(?::[^\/]+)|(?:\/\*$)|./g)||[];for(let i=r.length-1;i>=0;i--){const[c]=r[i];for(let l=o.length-1;l>=0;l--)if(o[l].indexOf(c)!==-1){o[l]=o[l].replace(c,r[i][1]);break}}return n(this,Ie).insert(o,e,a,n(this,Le),s),a}buildRegExp(){let t=n(this,Ie).buildRegExpStr();if(t==="")return[/^$/,[],[]];let e=0;const s=[],a=[];return t=t.replace(/#(\d+)|@(\d+)|\.\*\$/g,(r,o,i)=>o!==void 0?(s[++e]=Number(o),"$()"):(i!==void 0&&(a[Number(i)]=++e),"")),[new RegExp(`^${t}`),s,a]}},Le=new WeakMap,Ie=new WeakMap,at),es=[/^$/,[],Object.create(null)],Be=Object.create(null);function yt(t){return Be[t]??(Be[t]=new RegExp(t==="*"?"":`^${t.replace(/\/\*$|([.\\+*[^\]$()])/g,(e,s)=>s?`\\${s}`:"(?:|/.*)")}$`))}function ts(){Be=Object.create(null)}function ss(t){var d;const e=new Zt,s=[];if(t.length===0)return es;const a=t.map(u=>[!/\*|\/:/.test(u[0]),...u]).sort(([u,p],[g,E])=>u?1:g?-1:p.length-E.length),r=Object.create(null);for(let u=0,p=-1,g=a.length;u<g;u++){const[E,A,B]=a[u];E?r[A]=[B.map(([O])=>[O,Object.create(null)]),xt]:p++;let T;try{T=e.insert(A,p,E)}catch(O){throw O===le?new vt(A):O}E||(s[p]=B.map(([O,b])=>{const D=Object.create(null);for(b-=1;b>=0;b--){const[be,Me]=T[b];D[be]=Me}return[O,D]}))}const[o,i,c]=e.buildRegExp();for(let u=0,p=s.length;u<p;u++)for(let g=0,E=s[u].length;g<E;g++){const A=(d=s[u][g])==null?void 0:d[1];if(!A)continue;const B=Object.keys(A);for(let T=0,O=B.length;T<O;T++)A[B[T]]=c[A[B[T]]]}const l=[];for(const u in i)l[u]=s[i[u]];return[o,l,r]}function ne(t,e){if(t){for(const s of Object.keys(t).sort((a,r)=>r.length-a.length))if(yt(s).test(e))return[...t[s]]}}var z,G,He,wt,rt,as=(rt=class{constructor(){f(this,He);h(this,"name","RegExpRouter");f(this,z);f(this,G);h(this,"match",Jt);m(this,z,{[x]:Object.create(null)}),m(this,G,{[x]:Object.create(null)})}add(t,e,s){var c;const a=n(this,z),r=n(this,G);if(!a||!r)throw new Error(gt);a[t]||[a,r].forEach(l=>{l[t]=Object.create(null),Object.keys(l[x]).forEach(d=>{l[t][d]=[...l[x][d]]})}),e==="/*"&&(e="*");const o=(e.match(/\/:/g)||[]).length;if(/\*$/.test(e)){const l=yt(e);t===x?Object.keys(a).forEach(d=>{var u;(u=a[d])[e]||(u[e]=ne(a[d],e)||ne(a[x],e)||[])}):(c=a[t])[e]||(c[e]=ne(a[t],e)||ne(a[x],e)||[]),Object.keys(a).forEach(d=>{(t===x||t===d)&&Object.keys(a[d]).forEach(u=>{l.test(u)&&a[d][u].push([s,o])})}),Object.keys(r).forEach(d=>{(t===x||t===d)&&Object.keys(r[d]).forEach(u=>l.test(u)&&r[d][u].push([s,o]))});return}const i=ct(e)||[e];for(let l=0,d=i.length;l<d;l++){const u=i[l];Object.keys(r).forEach(p=>{var g;(t===x||t===p)&&((g=r[p])[u]||(g[u]=[...ne(a[p],u)||ne(a[x],u)||[]]),r[p][u].push([s,o-d+l+1]))})}}buildAllMatchers(){const t=Object.create(null);return Object.keys(n(this,G)).concat(Object.keys(n(this,z))).forEach(e=>{t[e]||(t[e]=v(this,He,wt).call(this,e))}),m(this,z,m(this,G,void 0)),ts(),t}},z=new WeakMap,G=new WeakMap,He=new WeakSet,wt=function(t){const e=[];let s=t===x;return[n(this,z),n(this,G)].forEach(a=>{const r=a[t]?Object.keys(a[t]).map(o=>[o,a[t][o]]):[];r.length!==0?(s||(s=!0),e.push(...r)):t!==x&&e.push(...Object.keys(a[x]).map(o=>[o,a[x][o]]))}),s?ss(e):null},rt),W,F,ot,rs=(ot=class{constructor(t){h(this,"name","SmartRouter");f(this,W,[]);f(this,F,[]);m(this,W,t.routers)}add(t,e,s){if(!n(this,F))throw new Error(gt);n(this,F).push([t,e,s])}match(t,e){if(!n(this,F))throw new Error("Fatal error");const s=n(this,W),a=n(this,F),r=s.length;let o=0,i;for(;o<r;o++){const c=s[o];try{for(let l=0,d=a.length;l<d;l++)c.add(...a[l]);i=c.match(t,e)}catch(l){if(l instanceof vt)continue;throw l}this.match=c.match.bind(c),m(this,W,[c]),m(this,F,void 0);break}if(o===r)throw new Error("Fatal error");return this.name=`SmartRouter + ${this.activeRouter.name}`,i}get activeRouter(){if(n(this,F)||n(this,W).length!==1)throw new Error("No active router has been determined yet.");return n(this,W)[0]}},W=new WeakMap,F=new WeakMap,ot),Ee=Object.create(null),os=t=>{for(const e in t)return!0;return!1},K,k,te,fe,w,N,X,ge,ns=(ge=class{constructor(e,s,a){f(this,N);f(this,K);f(this,k);f(this,te);f(this,fe,0);f(this,w,Ee);if(m(this,k,a||Object.create(null)),m(this,K,[]),e&&s){const r=Object.create(null);r[e]={handler:s,possibleKeys:[],score:0},m(this,K,[r])}m(this,te,[])}insert(e,s,a){m(this,fe,++Je(this,fe)._);let r=this;const o=$t(s),i=[];for(let c=0,l=o.length;c<l;c++){const d=o[c],u=o[c+1],p=Lt(d,u),g=Array.isArray(p)?p[0]:d;if(g in n(r,k)){r=n(r,k)[g],p&&i.push(p[1]);continue}n(r,k)[g]=new ge,p&&(n(r,te).push(p),i.push(p[1])),r=n(r,k)[g]}return n(r,K).push({[e]:{handler:a,possibleKeys:i.filter((c,l,d)=>d.indexOf(c)===l),score:n(this,fe)}}),r}search(e,s){var u;const a=[];m(this,w,Ee);let o=[this];const i=it(s),c=[],l=i.length;let d=null;for(let p=0;p<l;p++){const g=i[p],E=p===l-1,A=[];for(let T=0,O=o.length;T<O;T++){const b=o[T],D=n(b,k)[g];D&&(m(D,w,n(b,w)),E?(n(D,k)["*"]&&v(this,N,X).call(this,a,n(D,k)["*"],e,n(b,w)),v(this,N,X).call(this,a,D,e,n(b,w))):A.push(D));for(let be=0,Me=n(b,te).length;be<Me;be++){const Ge=n(b,te)[be],U=n(b,w)===Ee?{}:{...n(b,w)};if(Ge==="*"){const re=n(b,k)["*"];re&&(v(this,N,X).call(this,a,re,e,n(b,w)),m(re,w,U),A.push(re));continue}const[kt,We,xe]=Ge;if(!g&&!(xe instanceof RegExp))continue;const L=n(b,k)[kt];if(xe instanceof RegExp){if(d===null){d=new Array(l);let oe=s[0]==="/"?1:0;for(let ye=0;ye<l;ye++)d[ye]=oe,oe+=i[ye].length+1}const re=s.substring(d[p]),qe=xe.exec(re);if(qe){if(U[We]=qe[0],v(this,N,X).call(this,a,L,e,n(b,w),U),os(n(L,k))){m(L,w,U);const oe=((u=qe[0].match(/\//))==null?void 0:u.length)??0;(c[oe]||(c[oe]=[])).push(L)}continue}}(xe===!0||xe.test(g))&&(U[We]=g,E?(v(this,N,X).call(this,a,L,e,U,n(b,w)),n(L,k)["*"]&&v(this,N,X).call(this,a,n(L,k)["*"],e,U,n(b,w))):(m(L,w,U),A.push(L)))}}const B=c.shift();o=B?A.concat(B):A}return a.length>1&&a.sort((p,g)=>p.score-g.score),[a.map(({handler:p,params:g})=>[p,g])]}},K=new WeakMap,k=new WeakMap,te=new WeakMap,fe=new WeakMap,w=new WeakMap,N=new WeakSet,X=function(e,s,a,r,o){for(let i=0,c=n(s,K).length;i<c;i++){const l=n(s,K)[i],d=l[a]||l[x],u={};if(d!==void 0&&(d.params=Object.create(null),e.push(d),r!==Ee||o&&o!==Ee))for(let p=0,g=d.possibleKeys.length;p<g;p++){const E=d.possibleKeys[p],A=u[d.score];d.params[E]=o!=null&&o[E]&&!A?o[E]:r[E]??(o==null?void 0:o[E]),u[d.score]=!0}}},ge),se,nt,is=(nt=class{constructor(){h(this,"name","TrieRouter");f(this,se);m(this,se,new ns)}add(t,e,s){const a=ct(e);if(a){for(let r=0,o=a.length;r<o;r++)n(this,se).insert(t,a[r],s);return}n(this,se).insert(t,e,s)}match(t,e){return n(this,se).search(t,e)}},se=new WeakMap,nt),Et=class extends Kt{constructor(t={}){super(t),this.router=t.router??new rs({routers:[new as,new is]})}},ls=t=>{const e={origin:"*",allowMethods:["GET","HEAD","PUT","POST","DELETE","PATCH"],allowHeaders:[],exposeHeaders:[],...t},s=(r=>typeof r=="string"?r==="*"?()=>r:o=>r===o?o:null:typeof r=="function"?r:o=>r.includes(o)?o:null)(e.origin),a=(r=>typeof r=="function"?r:Array.isArray(r)?()=>r:()=>[])(e.allowMethods);return async function(o,i){var d;function c(u,p){o.res.headers.set(u,p)}const l=await s(o.req.header("origin")||"",o);if(l&&c("Access-Control-Allow-Origin",l),e.credentials&&c("Access-Control-Allow-Credentials","true"),(d=e.exposeHeaders)!=null&&d.length&&c("Access-Control-Expose-Headers",e.exposeHeaders.join(",")),o.req.method==="OPTIONS"){e.origin!=="*"&&c("Vary","Origin"),e.maxAge!=null&&c("Access-Control-Max-Age",e.maxAge.toString());const u=await a(o.req.header("origin")||"",o);u.length&&c("Access-Control-Allow-Methods",u.join(","));let p=e.allowHeaders;if(!(p!=null&&p.length)){const g=o.req.header("Access-Control-Request-Headers");g&&(p=g.split(/\s*,\s*/))}return p!=null&&p.length&&(c("Access-Control-Allow-Headers",p.join(",")),o.res.headers.append("Vary","Access-Control-Request-Headers")),o.res.headers.delete("Content-Length"),o.res.headers.delete("Content-Type"),new Response(null,{headers:o.res.headers,status:204,statusText:"No Content"})}await i(),e.origin!=="*"&&o.header("Vary","Origin",{append:!0})}};const C={fast:"@cf/meta/llama-3.2-3b-instruct",balanced:"@cf/meta/llama-3.1-8b-instruct-fp8",powerful:"@cf/meta/llama-3.3-70b-instruct-fp8-fast",coder:"@cf/qwen/qwen2.5-coder-32b-instruct",reason:"@cf/deepseek-ai/deepseek-r1-distill-qwen-32b",kimi:"@cf/moonshotai/kimi-k2.6",gpt:"@cf/openai/gpt-oss-120b",gemma:"@cf/google/gemma-3-12b-it"},ce="https://api.sixtechbrasil.com.br",cs="https://sixtechworkspace.kainow252-cmyk.workers.dev",ve=[{id:"developer",name:"Developer",emoji:"💻",color:"#F87171",category:"SixTech Workspace",source:"hybrid",model:C.coder,internalUrl:`${ce}/agents/developer`,basedOn:"sixtech-workspace + OpenHands",capabilities:["Código production-ready","APIs REST/GraphQL","Docker & DevOps","Banco de dados","Integrações"],desc:"Arquiteto de software sênior — Qwen2.5 Coder 32B + backend interno OpenHands",system:`Você é um arquiteto de software sênior da SixTech Brasil (baseado em OpenHands).
-Seu objetivo: gerar código production-ready, limpo, documentado e testável.
-Para cada solução:
-1. Explique a arquitetura escolhida
-2. Forneça o código completo com comentários
-3. Inclua exemplos de uso
-4. Liste dependências e requisitos
-5. Adicione casos de teste básicos
-Tecnologias dominadas: Python, TypeScript, Go, Rust, React, Next.js, FastAPI, Docker, Kubernetes, PostgreSQL, Redis.
-Responda SEMPRE em português brasileiro. Use markdown com blocos de código bem formatados.`},{id:"research",name:"Pesquisador",emoji:"🔍",color:"#6C63FF",category:"SixTech Workspace",source:"hybrid",model:C.powerful,internalUrl:`${ce}/agents/research`,basedOn:"sixtech-workspace",capabilities:["Pesquisa de mercado","Análise competitiva","Inteligência técnica","Verificação de fatos","Tendências"],desc:"Pesquisa profunda — Llama 3.3 70B + backend interno de inteligência",system:`Você é um agente especialista em pesquisa e inteligência de mercado da SixTech Brasil.
-Processo de pesquisa:
-1. Identifique o tema central e subtemas relevantes
-2. Apresente dados e fatos verificáveis
-3. Analise tendências e padrões
-4. Compare players e soluções do mercado
-5. Conclua com insights acionáveis
-Estruture sempre: Resumo Executivo → Análise Detalhada → Dados & Métricas → Tendências → Conclusões.
-Cite quando possível: "Segundo [fonte], ..." — diferencie fatos de inferências.
-Responda SEMPRE em português brasileiro.`},{id:"legal",name:"Jurídico",emoji:"⚖️",color:"#F59E0B",category:"SixTech Workspace",source:"hybrid",model:C.powerful,internalUrl:`${ce}/agents/legal`,basedOn:"sixtech-workspace",capabilities:["Contratos & NDAs","LGPD & Compliance","Propriedade intelectual","Termos de uso","Due diligence"],desc:"Especialista jurídico — direito digital, contratos e compliance brasileiro",system:`Você é um especialista jurídico da SixTech Brasil focado em direito digital e tech.
-Áreas de atuação:
-- Contratos de software, SaaS e licenças
-- NDAs e acordos de confidencialidade
-- LGPD, GDPR e compliance de dados
-- Propriedade intelectual e direitos autorais
-- Termos de uso e políticas de privacidade
-Sempre inclua: ⚠️ DISCLAIMER: Esta análise é informativa e educacional. Para situações reais, consulte um advogado habilitado.
-Responda SEMPRE em português brasileiro com linguagem técnica-jurídica acessível.`},{id:"designer",name:"Designer",emoji:"🎨",color:"#EC4899",category:"SixTech Workspace",source:"hybrid",model:C.powerful,internalUrl:`${ce}/agents/designer`,basedOn:"sixtech-workspace",capabilities:["UI/UX Design","Branding & identidade","Sistemas de design","HTML/CSS","Acessibilidade"],desc:"Designer criativo sênior — UI/UX, branding e especificações visuais",system:`Você é um designer criativo sênior da SixTech Brasil especializado em UI/UX e branding digital.
-Processo criativo:
-1. Entenda o contexto, público-alvo e objetivos
-2. Proponha direção visual com justificativa
-3. Defina paleta de cores (hex), tipografia e espaçamentos
-4. Descreva componentes e layouts em detalhes
-5. Forneça HTML/CSS quando solicitado
-6. Inclua considerações de acessibilidade (WCAG)
-Estilos dominados: Minimalista, Material Design, Glassmorphism, Neumorphism, Dark mode.
-Responda SEMPRE em português brasileiro com linguagem criativa e técnica.`},{id:"documents",name:"Documentos",emoji:"📄",color:"#14B8A6",category:"SixTech Workspace",source:"hybrid",model:C.balanced,internalUrl:`${ce}/agents/documents`,basedOn:"sixtech-workspace",capabilities:["Relatórios técnicos","Propostas comerciais","Documentação de API","Apresentações","Specs técnicas"],desc:"Especialista em documentação — relatórios, specs técnicas e propostas",system:`Você é um especialista em documentação técnica e criação de documentos da SixTech Brasil.
-Tipos de documentos que cria:
-- Relatórios técnicos e executivos
-- Especificações de produto (PRD)
-- Documentação de API (OpenAPI/Swagger style)
-- Propostas comerciais e pitches
-- Planos de projeto e roadmaps
-- Manuais e guias de usuário
-Estrutura padrão: Sumário Executivo → Contexto → Desenvolvimento → Resultados/Especificações → Conclusão → Próximos Passos.
-Responda SEMPRE em português brasileiro com linguagem formal, clara e precisa.`},{id:"analyst",name:"Analista",emoji:"📊",color:"#8B5CF6",category:"Cloudflare AI",source:"cloudflare",model:C.reason,basedOn:"DeepSeek R1 Distill Qwen 32B",capabilities:["Análise SWOT","KPIs & métricas","Modelagem financeira","Raciocínio lógico","Business intelligence"],desc:"Analista de elite com raciocínio avançado — DeepSeek R1 32B chain-of-thought",system:`Você é um analista de dados e negócios de elite da SixTech Brasil, powered by DeepSeek R1 (raciocínio chain-of-thought).
-Metodologia analítica:
-<think>
-- Decompor o problema em componentes
-- Identificar variáveis-chave e relações causais
-- Testar hipóteses alternativas
-- Validar com dados quando disponíveis
-</think>
-Entregáveis: Análise SWOT, KPIs sugeridos, modelos de decisão, cenários (otimista/realista/pessimista), recomendações priorizadas.
-Seja rigoroso, baseado em evidências. Mostre seu raciocínio passo a passo.
-Responda SEMPRE em português brasileiro com estrutura analítica densa e precisa.`},{id:"reviewer",name:"Revisor QA",emoji:"🛡️",color:"#10B981",category:"Cloudflare AI",source:"cloudflare",model:C.balanced,basedOn:"Llama 3.1 8B",capabilities:["Code review","Quality assurance","Security audit","Scoring 0-10","Melhorias específicas"],desc:"Revisor crítico de qualidade — análise rigorosa com scoring e melhorias",system:`Você é o revisor de qualidade (QA Lead) da SixTech Brasil. Analise criticamente qualquer conteúdo recebido.
-Framework de revisão:
-📋 ANÁLISE GERAL: Objetivo, completude, clareza
-⚠️ PROBLEMAS ENCONTRADOS: Liste todos com severidade (crítico/alto/médio/baixo)
-✅ PONTOS POSITIVOS: O que está bem feito
-🔧 MELHORIAS ESPECÍFICAS: Sugestões concretas com exemplos
-🔒 SEGURANÇA (se código): Vulnerabilidades, boas práticas
-📊 SCORE FINAL: X/10 com justificativa clara
-Seja honesto, direto e construtivo. Não suavize problemas sérios.
-Responda SEMPRE em português brasileiro.`},{id:"chat-assistant",name:"Assistente",emoji:"💬",color:"#06B6D4",category:"Cloudflare AI",source:"cloudflare",model:C.balanced,basedOn:"Llama 3.1 8B + SSE Streaming",capabilities:["Chat geral","Streaming em tempo real","Contexto de conversa","Múltiplos idiomas","Respostas rápidas"],desc:"Assistente conversacional com streaming em tempo real — baseado no sixtechworkspace",system:`Você é o assistente inteligente da SixTech Brasil, empresa líder em soluções de IA no Brasil.
-Seja útil, amigável e direto. Responda em português brasileiro por padrão.
-Se o usuário falar em inglês, responda em inglês.
-Para perguntas técnicas: seja preciso e detalhado.
-Para perguntas gerais: seja conciso e claro.
-Você representa os valores da SixTech: inovação, excelência técnica e foco no cliente.`},{id:"orchestrator",name:"Super Orquestrador",emoji:"🎯",color:"#22D3EE",category:"Cloudflare AI",source:"cloudflare",model:C.kimi,basedOn:"Kimi K2.6 (1T parâmetros) + SuperAgentOrchestrator",capabilities:["Roteamento inteligente","Síntese de múltiplos agentes","Planejamento complexo","Delegação de tarefas","Consolidação final"],desc:"Super Agente Orquestrador — Kimi K2.6 1T params, CEO da equipe de agentes",system:`Você é o Super Agente Orquestrador da SixTech Brasil, powered by Kimi K2.6 (1 trilhão de parâmetros).
-Baseado no SuperAgentOrchestrator do sixtech-workspace com capacidades expandidas.
-
-Missão de orquestração:
-1. ANALISAR a solicitação e identificar domínios necessários
-2. PLANEJAR quais agentes devem atuar e em qual ordem
-3. SINTETIZAR as saídas dos agentes em resposta coesa
-4. DECIDIR como CEO: prioridades, trade-offs e recomendação final
-
-Roteamento inteligente:
-- "código/api/sistema" → Developer Agent
-- "contrato/nda/legal" → Jurídico Agent  
-- "logo/design/ui/ux" → Designer Agent
-- "pesquisa/mercado/análise" → Pesquisador + Analista
-- "relatório/documento" → Documentos Agent
-- "revisar/qualidade" → Revisor QA
-
-Ao sintetizar: elimine redundâncias, resolva conflitos, construa narrativa coesa.
-Responda SEMPRE em português brasileiro. Use markdown rico e estruturado.`}];async function ds(t,e){try{const s=new AbortController,a=setTimeout(()=>s.abort(),8e3),r=await fetch(t,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({task:e,message:e}),signal:s.signal});if(clearTimeout(a),!r.ok)return null;const o=await r.json();return o.result||o.response||o.output||null}catch{return null}}async function Ze(t,e,s,a,r=1200){const o=[{role:"system",content:s},{role:"user",content:a}],i=await t.run(e,{messages:o,max_tokens:r});return i&&typeof i=="object"&&"response"in i?i.response||"":String(i||"")}async function ze(t,e,s){const a=Date.now();let r="",o=!1,i=t.source;try{if(t.source==="hybrid"&&t.internalUrl){const c=await ds(t.internalUrl,e);c?(r=c,i="internal",o=!1):(r=await Ze(s,t.model,t.system,e,1500),i="cloudflare",o=!0)}else r=await Ze(s,t.model,t.system,e,1500),i="cloudflare",o=!1}catch(c){r=`❌ Erro: ${(c==null?void 0:c.message)||"falha inesperada"}`}return{agentId:t.id,name:t.name,emoji:t.emoji,color:t.color,model:t.model,source:i,usedFallback:o,response:r,duration:Date.now()-a}}function us(t){const e=t.toLowerCase(),s=[];return/código|code|api|sistema|função|script|bug|deploy|docker|sql|banco|database|programar|desenvolver|criar.*app/.test(e)&&s.push("developer"),/contrato|nda|legal|jurídico|lgpd|compliance|cláusula|acordo|lei|direito|privacy/.test(e)&&s.push("legal"),/design|logo|ui|ux|interface|layout|cor|paleta|branding|wireframe|figma|css|visual/.test(e)&&s.push("designer"),/pesquis|research|mercado|concorrent|trend|análise|dados|market|investigar|buscar/.test(e)&&s.push("research"),/relatório|documento|report|proposta|spec|documentaç|apresent|manual|readme|word|pdf/.test(e)&&s.push("documents"),/analise|analisa|kpi|métrica|swot|negócio|estratégia|financeiro|projeção|cenário/.test(e)&&s.push("analyst"),/revisar|review|qualidade|verificar|corrigir|melhorar|audit|checar|validar/.test(e)&&s.push("reviewer"),s.length===0&&s.push("orchestrator"),s.length>1&&s.push("orchestrator"),[...new Set(s)]}const $=new Et;$.use("*",ls());$.get("/api/agents",t=>t.json({total:ve.length,models:Object.keys(C).length,repos:["sixtech-workspace","sixtechworkspace","kndev-IA","sixtechbrasil"],agents:ve.map(e=>({id:e.id,name:e.name,emoji:e.emoji,color:e.color,desc:e.desc,source:e.source,model:e.model,category:e.category,capabilities:e.capabilities,basedOn:e.basedOn,internalUrl:e.internalUrl}))}));$.post("/api/agent/:id",async t=>{const e=ve.find(o=>o.id===t.req.param("id"));if(!e)return t.json({error:"Agente não encontrado"},404);const{message:s,task:a}=await t.req.json(),r=await ze(e,s||a||"",t.env.AI);return t.json(r)});$.post("/api/orchestrate",async t=>{var c;const{task:e,message:s}=await t.req.json(),a=e||s||"";if(!a)return t.json({error:"task obrigatório"},400);const r=us(a),o=r.map(l=>ve.find(d=>d.id===l)).filter(Boolean),i=[];for(const l of o){const d=l.id==="orchestrator"&&i.length>0?`Tarefa original: "${a}"
+var Rt=Object.defineProperty;var We=t=>{throw TypeError(t)};var Et=(t,e,a)=>e in t?Rt(t,e,{enumerable:!0,configurable:!0,writable:!0,value:a}):t[e]=a;var f=(t,e,a)=>Et(t,typeof e!="symbol"?e+"":e,a),Ve=(t,e,a)=>e.has(t)||We("Cannot "+a);var i=(t,e,a)=>(Ve(t,e,"read from private field"),a?a.call(t):e.get(t)),h=(t,e,a)=>e.has(t)?We("Cannot add the same private member more than once"):e instanceof WeakSet?e.add(t):e.set(t,a),g=(t,e,a,r)=>(Ve(t,e,"write to private field"),r?r.call(t,a):e.set(t,a),a),b=(t,e,a)=>(Ve(t,e,"access private method"),a);var Je=(t,e,a,r)=>({set _(s){g(t,e,s,a)},get _(){return i(t,e,r)}});var Ye=(t,e,a)=>(r,s)=>{let o=-1;return n(0);async function n(c){if(c<=o)throw new Error("next() called multiple times");o=c;let l,d=!1,p;if(t[c]?(p=t[c][0][0],r.req.routeIndex=c):p=c===t.length&&s||void 0,p)try{l=await p(r,()=>n(c+1))}catch(u){if(u instanceof Error&&e)r.error=u,l=await e(u,r),d=!0;else throw u}else r.finalized===!1&&a&&(l=await a(r));return l&&(r.finalized===!1||d)&&(r.res=l),r}},St=Symbol(),jt=async(t,e=Object.create(null))=>{const{all:a=!1,dot:r=!1}=e,o=(t instanceof ut?t.raw.headers:t.headers).get("Content-Type");return o!=null&&o.startsWith("multipart/form-data")||o!=null&&o.startsWith("application/x-www-form-urlencoded")?Pt(t,{all:a,dot:r}):{}};async function Pt(t,e){const a=await t.formData();return a?Ot(a,e):{}}function Ot(t,e){const a=Object.create(null);return t.forEach((r,s)=>{e.all||s.endsWith("[]")?Dt(a,s,r):a[s]=r}),e.dot&&Object.entries(a).forEach(([r,s])=>{r.includes(".")&&(It(a,r,s),delete a[r])}),a}var Dt=(t,e,a)=>{t[e]!==void 0?Array.isArray(t[e])?t[e].push(a):t[e]=[t[e],a]:e.endsWith("[]")?t[e]=[a]:t[e]=a},It=(t,e,a)=>{if(/(?:^|\.)__proto__\./.test(e))return;let r=t;const s=e.split(".");s.forEach((o,n)=>{n===s.length-1?r[o]=a:((!r[o]||typeof r[o]!="object"||Array.isArray(r[o])||r[o]instanceof File)&&(r[o]=Object.create(null)),r=r[o])})},nt=t=>{const e=t.split("/");return e[0]===""&&e.shift(),e},Tt=t=>{const{groups:e,path:a}=zt(t),r=nt(a);return Lt(r,e)},zt=t=>{const e=[];return t=t.replace(/\{[^}]+\}/g,(a,r)=>{const s=`@${r}`;return e.push([s,a]),s}),{groups:e,path:t}},Lt=(t,e)=>{for(let a=e.length-1;a>=0;a--){const[r]=e[a];for(let s=t.length-1;s>=0;s--)if(t[s].includes(r)){t[s]=t[s].replace(r,e[a][1]);break}}return t},De={},Bt=(t,e)=>{if(t==="*")return"*";const a=t.match(/^\:([^\{\}]+)(?:\{(.+)\})?$/);if(a){const r=`${t}#${e}`;return De[r]||(a[2]?De[r]=e&&e[0]!==":"&&e[0]!=="*"?[r,a[1],new RegExp(`^${a[2]}(?=/${e})`)]:[t,a[1],new RegExp(`^${a[2]}$`)]:De[r]=[t,a[1],!0]),De[r]}return null},_e=(t,e)=>{try{return e(t)}catch{return t.replace(/(?:%[0-9A-Fa-f]{2})+/g,a=>{try{return e(a)}catch{return a}})}},Ft=t=>_e(t,decodeURI),lt=t=>{const e=t.url,a=e.indexOf("/",e.indexOf(":")+4);let r=a;for(;r<e.length;r++){const s=e.charCodeAt(r);if(s===37){const o=e.indexOf("?",r),n=e.indexOf("#",r),c=o===-1?n===-1?void 0:n:n===-1?o:Math.min(o,n),l=e.slice(a,c);return Ft(l.includes("%25")?l.replace(/%25/g,"%2525"):l)}else if(s===63||s===35)break}return e.slice(a,r)},Mt=t=>{const e=lt(t);return e.length>1&&e.at(-1)==="/"?e.slice(0,-1):e},J=(t,e,...a)=>(a.length&&(e=J(e,...a)),`${(t==null?void 0:t[0])==="/"?"":"/"}${t}${e==="/"?"":`${(t==null?void 0:t.at(-1))==="/"?"":"/"}${(e==null?void 0:e[0])==="/"?e.slice(1):e}`}`),ct=t=>{if(t.charCodeAt(t.length-1)!==63||!t.includes(":"))return null;const e=t.split("/"),a=[];let r="";return e.forEach(s=>{if(s!==""&&!/\:/.test(s))r+="/"+s;else if(/\:/.test(s))if(/\?/.test(s)){a.length===0&&r===""?a.push("/"):a.push(r);const o=s.replace("?","");r+="/"+o,a.push(r)}else r+="/"+s}),a.filter((s,o,n)=>n.indexOf(s)===o)},qe=t=>/[%+]/.test(t)?(t.indexOf("+")!==-1&&(t=t.replace(/\+/g," ")),t.indexOf("%")!==-1?_e(t,pt):t):t,dt=(t,e,a)=>{let r;if(!a&&e&&!/[%+]/.test(e)){let n=t.indexOf("?",8);if(n===-1)return;for(t.startsWith(e,n+1)||(n=t.indexOf(`&${e}`,n+1));n!==-1;){const c=t.charCodeAt(n+e.length+1);if(c===61){const l=n+e.length+2,d=t.indexOf("&",l);return qe(t.slice(l,d===-1?void 0:d))}else if(c==38||isNaN(c))return"";n=t.indexOf(`&${e}`,n+1)}if(r=/[%+]/.test(t),!r)return}const s={};r??(r=/[%+]/.test(t));let o=t.indexOf("?",8);for(;o!==-1;){const n=t.indexOf("&",o+1);let c=t.indexOf("=",o);c>n&&n!==-1&&(c=-1);let l=t.slice(o+1,c===-1?n===-1?void 0:n:c);if(r&&(l=qe(l)),o=n,l==="")continue;let d;c===-1?d="":(d=t.slice(c+1,n===-1?void 0:n),r&&(d=qe(d))),a?(s[l]&&Array.isArray(s[l])||(s[l]=[]),s[l].push(d)):s[l]??(s[l]=d)}return e?s[e]:s},Ht=dt,Vt=(t,e)=>dt(t,e,!0),pt=decodeURIComponent,Qe=t=>_e(t,pt),de,S,$,gt,ft,Ne,F,tt,ut=(tt=class{constructor(t,e="/",a=[[]]){h(this,$);f(this,"raw");h(this,de);h(this,S);f(this,"routeIndex",0);f(this,"path");f(this,"bodyCache",{});h(this,F,t=>{const{bodyCache:e,raw:a}=this,r=e[t];if(r)return r;const s=Object.keys(e)[0];return s?e[s].then(o=>(s==="json"&&(o=JSON.stringify(o)),new Response(o)[t]())):e[t]=a[t]()});this.raw=t,this.path=e,g(this,S,a),g(this,de,{})}param(t){return t?b(this,$,gt).call(this,t):b(this,$,ft).call(this)}query(t){return Ht(this.url,t)}queries(t){return Vt(this.url,t)}header(t){if(t)return this.raw.headers.get(t)??void 0;const e={};return this.raw.headers.forEach((a,r)=>{e[r]=a}),e}async parseBody(t){return jt(this,t)}json(){return i(this,F).call(this,"text").then(t=>JSON.parse(t))}text(){return i(this,F).call(this,"text")}arrayBuffer(){return i(this,F).call(this,"arrayBuffer")}bytes(){return i(this,F).call(this,"arrayBuffer").then(t=>new Uint8Array(t))}blob(){return i(this,F).call(this,"blob")}formData(){return i(this,F).call(this,"formData")}addValidatedData(t,e){i(this,de)[t]=e}valid(t){return i(this,de)[t]}get url(){return this.raw.url}get method(){return this.raw.method}get[St](){return i(this,S)}get matchedRoutes(){return i(this,S)[0].map(([[,t]])=>t)}get routePath(){return i(this,S)[0].map(([[,t]])=>t)[this.routeIndex].path}},de=new WeakMap,S=new WeakMap,$=new WeakSet,gt=function(t){const e=i(this,S)[0][this.routeIndex][1][t],a=b(this,$,Ne).call(this,e);return a&&/\%/.test(a)?Qe(a):a},ft=function(){const t={},e=Object.keys(i(this,S)[0][this.routeIndex][1]);for(const a of e){const r=b(this,$,Ne).call(this,i(this,S)[0][this.routeIndex][1][a]);r!==void 0&&(t[a]=/\%/.test(r)?Qe(r):r)}return t},Ne=function(t){return i(this,S)[1]?i(this,S)[1][t]:t},F=new WeakMap,tt),qt={Stringify:1},mt=async(t,e,a,r,s)=>{typeof t=="object"&&!(t instanceof String)&&(t instanceof Promise||(t=t.toString()),t instanceof Promise&&(t=await t));const o=t.callbacks;return o!=null&&o.length?(s?s[0]+=t:s=[t],Promise.all(o.map(c=>c({phase:e,buffer:s,context:r}))).then(c=>Promise.all(c.filter(Boolean).map(l=>mt(l,e,!1,r,s))).then(()=>s[0]))):Promise.resolve(t)},$t="text/plain; charset=UTF-8",$e=(t,e)=>({"Content-Type":t,...e}),we=(t,e)=>new Response(t,e),Re,Ee,M,pe,H,E,Se,ue,ge,Z,je,Pe,_,le,at,Nt=(at=class{constructor(t,e){h(this,_);h(this,Re);h(this,Ee);f(this,"env",{});h(this,M);f(this,"finalized",!1);f(this,"error");h(this,pe);h(this,H);h(this,E);h(this,Se);h(this,ue);h(this,ge);h(this,Z);h(this,je);h(this,Pe);f(this,"render",(...t)=>(i(this,ue)??g(this,ue,e=>this.html(e)),i(this,ue).call(this,...t)));f(this,"setLayout",t=>g(this,Se,t));f(this,"getLayout",()=>i(this,Se));f(this,"setRenderer",t=>{g(this,ue,t)});f(this,"header",(t,e,a)=>{this.finalized&&g(this,E,we(i(this,E).body,i(this,E)));const r=i(this,E)?i(this,E).headers:i(this,Z)??g(this,Z,new Headers);e===void 0?r.delete(t):a!=null&&a.append?r.append(t,e):r.set(t,e)});f(this,"status",t=>{g(this,pe,t)});f(this,"set",(t,e)=>{i(this,M)??g(this,M,new Map),i(this,M).set(t,e)});f(this,"get",t=>i(this,M)?i(this,M).get(t):void 0);f(this,"newResponse",(...t)=>b(this,_,le).call(this,...t));f(this,"body",(t,e,a)=>b(this,_,le).call(this,t,e,a));f(this,"text",(t,e,a)=>!i(this,Z)&&!i(this,pe)&&!e&&!a&&!this.finalized?new Response(t):b(this,_,le).call(this,t,e,$e($t,a)));f(this,"json",(t,e,a)=>b(this,_,le).call(this,JSON.stringify(t),e,$e("application/json",a)));f(this,"html",(t,e,a)=>{const r=s=>b(this,_,le).call(this,s,e,$e("text/html; charset=UTF-8",a));return typeof t=="object"?mt(t,qt.Stringify,!1,{}).then(r):r(t)});f(this,"redirect",(t,e)=>{const a=String(t);return this.header("Location",/[^\x00-\xFF]/.test(a)?encodeURI(a):a),this.newResponse(null,e??302)});f(this,"notFound",()=>(i(this,ge)??g(this,ge,()=>we()),i(this,ge).call(this,this)));g(this,Re,t),e&&(g(this,H,e.executionCtx),this.env=e.env,g(this,ge,e.notFoundHandler),g(this,Pe,e.path),g(this,je,e.matchResult))}get req(){return i(this,Ee)??g(this,Ee,new ut(i(this,Re),i(this,Pe),i(this,je))),i(this,Ee)}get event(){if(i(this,H)&&"respondWith"in i(this,H))return i(this,H);throw Error("This context has no FetchEvent")}get executionCtx(){if(i(this,H))return i(this,H);throw Error("This context has no ExecutionContext")}get res(){return i(this,E)||g(this,E,we(null,{headers:i(this,Z)??g(this,Z,new Headers)}))}set res(t){if(i(this,E)&&t){t=we(t.body,t);for(const[e,a]of i(this,E).headers.entries())if(e!=="content-type")if(e==="set-cookie"){const r=i(this,E).headers.getSetCookie();t.headers.delete("set-cookie");for(const s of r)t.headers.append("set-cookie",s)}else t.headers.set(e,a)}g(this,E,t),this.finalized=!0}get var(){return i(this,M)?Object.fromEntries(i(this,M)):{}}},Re=new WeakMap,Ee=new WeakMap,M=new WeakMap,pe=new WeakMap,H=new WeakMap,E=new WeakMap,Se=new WeakMap,ue=new WeakMap,ge=new WeakMap,Z=new WeakMap,je=new WeakMap,Pe=new WeakMap,_=new WeakSet,le=function(t,e,a){const r=i(this,E)?new Headers(i(this,E).headers):i(this,Z)??new Headers;if(typeof e=="object"&&"headers"in e){const o=e.headers instanceof Headers?e.headers:new Headers(e.headers);for(const[n,c]of o)n.toLowerCase()==="set-cookie"?r.append(n,c):r.set(n,c)}if(a)for(const[o,n]of Object.entries(a))if(typeof n=="string")r.set(o,n);else{r.delete(o);for(const c of n)r.append(o,c)}const s=typeof e=="number"?e:(e==null?void 0:e.status)??i(this,pe);return we(t,{status:s,headers:r})},at),y="ALL",_t="all",Ut=["get","post","put","delete","options","patch"],ht="Can not add a route since the matcher is already built.",vt=class extends Error{},Gt="__COMPOSED_HANDLER",Kt=t=>t.text("404 Not Found",404),Xe=(t,e)=>{if("getResponse"in t){const a=t.getResponse();return e.newResponse(a.body,a)}return console.error(t),e.text("Internal Server Error",500)},P,w,bt,O,Y,Ie,Te,fe,Wt=(fe=class{constructor(e={}){h(this,w);f(this,"get");f(this,"post");f(this,"put");f(this,"delete");f(this,"options");f(this,"patch");f(this,"all");f(this,"on");f(this,"use");f(this,"router");f(this,"getPath");f(this,"_basePath","/");h(this,P,"/");f(this,"routes",[]);h(this,O,Kt);f(this,"errorHandler",Xe);f(this,"onError",e=>(this.errorHandler=e,this));f(this,"notFound",e=>(g(this,O,e),this));f(this,"fetch",(e,...a)=>b(this,w,Te).call(this,e,a[1],a[0],e.method));f(this,"request",(e,a,r,s)=>e instanceof Request?this.fetch(a?new Request(e,a):e,r,s):(e=e.toString(),this.fetch(new Request(/^https?:\/\//.test(e)?e:`http://localhost${J("/",e)}`,a),r,s)));f(this,"fire",()=>{addEventListener("fetch",e=>{e.respondWith(b(this,w,Te).call(this,e.request,e,void 0,e.request.method))})});[...Ut,_t].forEach(o=>{this[o]=(n,...c)=>(typeof n=="string"?g(this,P,n):b(this,w,Y).call(this,o,i(this,P),n),c.forEach(l=>{b(this,w,Y).call(this,o,i(this,P),l)}),this)}),this.on=(o,n,...c)=>{for(const l of[n].flat()){g(this,P,l);for(const d of[o].flat())c.map(p=>{b(this,w,Y).call(this,d.toUpperCase(),i(this,P),p)})}return this},this.use=(o,...n)=>(typeof o=="string"?g(this,P,o):(g(this,P,"*"),n.unshift(o)),n.forEach(c=>{b(this,w,Y).call(this,y,i(this,P),c)}),this);const{strict:r,...s}=e;Object.assign(this,s),this.getPath=r??!0?e.getPath??lt:Mt}route(e,a){const r=this.basePath(e);return a.routes.map(s=>{var n;let o;a.errorHandler===Xe?o=s.handler:(o=async(c,l)=>(await Ye([],a.errorHandler)(c,()=>s.handler(c,l))).res,o[Gt]=s.handler),b(n=r,w,Y).call(n,s.method,s.path,o,s.basePath)}),this}basePath(e){const a=b(this,w,bt).call(this);return a._basePath=J(this._basePath,e),a}mount(e,a,r){let s,o;r&&(typeof r=="function"?o=r:(o=r.optionHandler,r.replaceRequest===!1?s=l=>l:s=r.replaceRequest));const n=o?l=>{const d=o(l);return Array.isArray(d)?d:[d]}:l=>{let d;try{d=l.executionCtx}catch{}return[l.env,d]};s||(s=(()=>{const l=J(this._basePath,e),d=l==="/"?0:l.length;return p=>{const u=new URL(p.url);return u.pathname=this.getPath(p).slice(d)||"/",new Request(u,p)}})());const c=async(l,d)=>{const p=await a(s(l.req.raw),...n(l));if(p)return p;await d()};return b(this,w,Y).call(this,y,J(e,"*"),c),this}},P=new WeakMap,w=new WeakSet,bt=function(){const e=new fe({router:this.router,getPath:this.getPath});return e.errorHandler=this.errorHandler,g(e,O,i(this,O)),e.routes=this.routes,e},O=new WeakMap,Y=function(e,a,r,s){e=e.toUpperCase(),a=J(this._basePath,a);const o={basePath:s!==void 0?J(this._basePath,s):this._basePath,path:a,method:e,handler:r};this.router.add(e,a,[r,o]),this.routes.push(o)},Ie=function(e,a){if(e instanceof Error)return this.errorHandler(e,a);throw e},Te=function(e,a,r,s){if(s==="HEAD")return(async()=>new Response(null,await b(this,w,Te).call(this,e,a,r,"GET")))();const o=this.getPath(e,{env:r}),n=this.router.match(s,o),c=new Nt(e,{path:o,matchResult:n,env:r,executionCtx:a,notFoundHandler:i(this,O)});if(n[0].length===1){let d;try{d=n[0][0][0][0](c,async()=>{c.res=await i(this,O).call(this,c)})}catch(p){return b(this,w,Ie).call(this,p,c)}return d instanceof Promise?d.then(p=>p||(c.finalized?c.res:i(this,O).call(this,c))).catch(p=>b(this,w,Ie).call(this,p,c)):d??i(this,O).call(this,c)}const l=Ye(n[0],this.errorHandler,i(this,O));return(async()=>{try{const d=await l(c);if(!d.finalized)throw new Error("Context is not finalized. Did you forget to return a Response object or `await next()`?");return d.res}catch(d){return b(this,w,Ie).call(this,d,c)}})()},fe),xt=[];function Jt(t,e){const a=this.buildAllMatchers(),r=(s,o)=>{const n=a[s]||a[y],c=n[2][o];if(c)return c;const l=o.match(n[0]);if(!l)return[[],xt];const d=l.indexOf("",1);return[n[1][d],l]};return this.match=r,r(t,e)}var Le="[^/]+",Ae=".*",Ce="(?:|/.*)",ce=Symbol(),Yt=new Set(".\\+*[^]$()");function Qt(t,e){return t.length===1?e.length===1?t<e?-1:1:-1:e.length===1||t===Ae||t===Ce?1:e===Ae||e===Ce?-1:t===Le?1:e===Le?-1:t.length===e.length?t<e?-1:1:e.length-t.length}var ee,te,D,se,Xt=(se=class{constructor(){h(this,ee);h(this,te);h(this,D,Object.create(null))}insert(e,a,r,s,o){if(e.length===0){if(i(this,ee)!==void 0)throw ce;if(o)return;g(this,ee,a);return}const[n,...c]=e,l=n==="*"?c.length===0?["","",Ae]:["","",Le]:n==="/*"?["","",Ce]:n.match(/^\:([^\{\}]+)(?:\{(.+)\})?$/);let d;if(l){const p=l[1];let u=l[2]||Le;if(p&&l[2]&&(u===".*"||(u=u.replace(/^\((?!\?:)(?=[^)]+\)$)/,"(?:"),/\((?!\?:)/.test(u))))throw ce;if(d=i(this,D)[u],!d){if(Object.keys(i(this,D)).some(v=>v!==Ae&&v!==Ce))throw ce;if(o)return;d=i(this,D)[u]=new se,p!==""&&g(d,te,s.varIndex++)}!o&&p!==""&&r.push([p,i(d,te)])}else if(d=i(this,D)[n],!d){if(Object.keys(i(this,D)).some(p=>p.length>1&&p!==Ae&&p!==Ce))throw ce;if(o)return;d=i(this,D)[n]=new se}d.insert(c,a,r,s,o)}buildRegExpStr(){const a=Object.keys(i(this,D)).sort(Qt).map(r=>{const s=i(this,D)[r];return(typeof i(s,te)=="number"?`(${r})@${i(s,te)}`:Yt.has(r)?`\\${r}`:r)+s.buildRegExpStr()});return typeof i(this,ee)=="number"&&a.unshift(`#${i(this,ee)}`),a.length===0?"":a.length===1?a[0]:"(?:"+a.join("|")+")"}},ee=new WeakMap,te=new WeakMap,D=new WeakMap,se),Be,Oe,rt,Zt=(rt=class{constructor(){h(this,Be,{varIndex:0});h(this,Oe,new Xt)}insert(t,e,a){const r=[],s=[];for(let n=0;;){let c=!1;if(t=t.replace(/\{[^}]+\}/g,l=>{const d=`@\\${n}`;return s[n]=[d,l],n++,c=!0,d}),!c)break}const o=t.match(/(?::[^\/]+)|(?:\/\*$)|./g)||[];for(let n=s.length-1;n>=0;n--){const[c]=s[n];for(let l=o.length-1;l>=0;l--)if(o[l].indexOf(c)!==-1){o[l]=o[l].replace(c,s[n][1]);break}}return i(this,Oe).insert(o,e,r,i(this,Be),a),r}buildRegExp(){let t=i(this,Oe).buildRegExpStr();if(t==="")return[/^$/,[],[]];let e=0;const a=[],r=[];return t=t.replace(/#(\d+)|@(\d+)|\.\*\$/g,(s,o,n)=>o!==void 0?(a[++e]=Number(o),"$()"):(n!==void 0&&(r[Number(n)]=++e),"")),[new RegExp(`^${t}`),a,r]}},Be=new WeakMap,Oe=new WeakMap,rt),ea=[/^$/,[],Object.create(null)],ze=Object.create(null);function yt(t){return ze[t]??(ze[t]=new RegExp(t==="*"?"":`^${t.replace(/\/\*$|([.\\+*[^\]$()])/g,(e,a)=>a?`\\${a}`:"(?:|/.*)")}$`))}function ta(){ze=Object.create(null)}function aa(t){var d;const e=new Zt,a=[];if(t.length===0)return ea;const r=t.map(p=>[!/\*|\/:/.test(p[0]),...p]).sort(([p,u],[v,A])=>p?1:v?-1:u.length-A.length),s=Object.create(null);for(let p=0,u=-1,v=r.length;p<v;p++){const[A,C,z]=r[p];A?s[C]=[z.map(([T])=>[T,Object.create(null)]),xt]:u++;let j;try{j=e.insert(C,u,A)}catch(T){throw T===ce?new vt(C):T}A||(a[u]=z.map(([T,x])=>{const L=Object.create(null);for(x-=1;x>=0;x--){const[be,Me]=j[x];L[be]=Me}return[T,L]}))}const[o,n,c]=e.buildRegExp();for(let p=0,u=a.length;p<u;p++)for(let v=0,A=a[p].length;v<A;v++){const C=(d=a[p][v])==null?void 0:d[1];if(!C)continue;const z=Object.keys(C);for(let j=0,T=z.length;j<T;j++)C[z[j]]=c[C[z[j]]]}const l=[];for(const p in n)l[p]=a[n[p]];return[o,l,s]}function ne(t,e){if(t){for(const a of Object.keys(t).sort((r,s)=>s.length-r.length))if(yt(a).test(e))return[...t[a]]}}var U,G,Fe,wt,st,ra=(st=class{constructor(){h(this,Fe);f(this,"name","RegExpRouter");h(this,U);h(this,G);f(this,"match",Jt);g(this,U,{[y]:Object.create(null)}),g(this,G,{[y]:Object.create(null)})}add(t,e,a){var c;const r=i(this,U),s=i(this,G);if(!r||!s)throw new Error(ht);r[t]||[r,s].forEach(l=>{l[t]=Object.create(null),Object.keys(l[y]).forEach(d=>{l[t][d]=[...l[y][d]]})}),e==="/*"&&(e="*");const o=(e.match(/\/:/g)||[]).length;if(/\*$/.test(e)){const l=yt(e);t===y?Object.keys(r).forEach(d=>{var p;(p=r[d])[e]||(p[e]=ne(r[d],e)||ne(r[y],e)||[])}):(c=r[t])[e]||(c[e]=ne(r[t],e)||ne(r[y],e)||[]),Object.keys(r).forEach(d=>{(t===y||t===d)&&Object.keys(r[d]).forEach(p=>{l.test(p)&&r[d][p].push([a,o])})}),Object.keys(s).forEach(d=>{(t===y||t===d)&&Object.keys(s[d]).forEach(p=>l.test(p)&&s[d][p].push([a,o]))});return}const n=ct(e)||[e];for(let l=0,d=n.length;l<d;l++){const p=n[l];Object.keys(s).forEach(u=>{var v;(t===y||t===u)&&((v=s[u])[p]||(v[p]=[...ne(r[u],p)||ne(r[y],p)||[]]),s[u][p].push([a,o-d+l+1]))})}}buildAllMatchers(){const t=Object.create(null);return Object.keys(i(this,G)).concat(Object.keys(i(this,U))).forEach(e=>{t[e]||(t[e]=b(this,Fe,wt).call(this,e))}),g(this,U,g(this,G,void 0)),ta(),t}},U=new WeakMap,G=new WeakMap,Fe=new WeakSet,wt=function(t){const e=[];let a=t===y;return[i(this,U),i(this,G)].forEach(r=>{const s=r[t]?Object.keys(r[t]).map(o=>[o,r[t][o]]):[];s.length!==0?(a||(a=!0),e.push(...s)):t!==y&&e.push(...Object.keys(r[y]).map(o=>[o,r[y][o]]))}),a?aa(e):null},st),K,V,ot,sa=(ot=class{constructor(t){f(this,"name","SmartRouter");h(this,K,[]);h(this,V,[]);g(this,K,t.routers)}add(t,e,a){if(!i(this,V))throw new Error(ht);i(this,V).push([t,e,a])}match(t,e){if(!i(this,V))throw new Error("Fatal error");const a=i(this,K),r=i(this,V),s=a.length;let o=0,n;for(;o<s;o++){const c=a[o];try{for(let l=0,d=r.length;l<d;l++)c.add(...r[l]);n=c.match(t,e)}catch(l){if(l instanceof vt)continue;throw l}this.match=c.match.bind(c),g(this,K,[c]),g(this,V,void 0);break}if(o===s)throw new Error("Fatal error");return this.name=`SmartRouter + ${this.activeRouter.name}`,n}get activeRouter(){if(i(this,V)||i(this,K).length!==1)throw new Error("No active router has been determined yet.");return i(this,K)[0]}},K=new WeakMap,V=new WeakMap,ot),ke=Object.create(null),oa=t=>{for(const e in t)return!0;return!1},W,R,ae,me,k,q,Q,he,ia=(he=class{constructor(e,a,r){h(this,q);h(this,W);h(this,R);h(this,ae);h(this,me,0);h(this,k,ke);if(g(this,R,r||Object.create(null)),g(this,W,[]),e&&a){const s=Object.create(null);s[e]={handler:a,possibleKeys:[],score:0},g(this,W,[s])}g(this,ae,[])}insert(e,a,r){g(this,me,++Je(this,me)._);let s=this;const o=Tt(a),n=[];for(let c=0,l=o.length;c<l;c++){const d=o[c],p=o[c+1],u=Bt(d,p),v=Array.isArray(u)?u[0]:d;if(v in i(s,R)){s=i(s,R)[v],u&&n.push(u[1]);continue}i(s,R)[v]=new he,u&&(i(s,ae).push(u),n.push(u[1])),s=i(s,R)[v]}return i(s,W).push({[e]:{handler:r,possibleKeys:n.filter((c,l,d)=>d.indexOf(c)===l),score:i(this,me)}}),s}search(e,a){var p;const r=[];g(this,k,ke);let o=[this];const n=nt(a),c=[],l=n.length;let d=null;for(let u=0;u<l;u++){const v=n[u],A=u===l-1,C=[];for(let j=0,T=o.length;j<T;j++){const x=o[j],L=i(x,R)[v];L&&(g(L,k,i(x,k)),A?(i(L,R)["*"]&&b(this,q,Q).call(this,r,i(L,R)["*"],e,i(x,k)),b(this,q,Q).call(this,r,L,e,i(x,k))):C.push(L));for(let be=0,Me=i(x,ae).length;be<Me;be++){const Ge=i(x,ae)[be],N=i(x,k)===ke?{}:{...i(x,k)};if(Ge==="*"){const oe=i(x,R)["*"];oe&&(b(this,q,Q).call(this,r,oe,e,i(x,k)),g(oe,k,N),C.push(oe));continue}const[Ct,Ke,xe]=Ge;if(!v&&!(xe instanceof RegExp))continue;const B=i(x,R)[Ct];if(xe instanceof RegExp){if(d===null){d=new Array(l);let ie=a[0]==="/"?1:0;for(let ye=0;ye<l;ye++)d[ye]=ie,ie+=n[ye].length+1}const oe=a.substring(d[u]),He=xe.exec(oe);if(He){if(N[Ke]=He[0],b(this,q,Q).call(this,r,B,e,i(x,k),N),oa(i(B,R))){g(B,k,N);const ie=((p=He[0].match(/\//))==null?void 0:p.length)??0;(c[ie]||(c[ie]=[])).push(B)}continue}}(xe===!0||xe.test(v))&&(N[Ke]=v,A?(b(this,q,Q).call(this,r,B,e,N,i(x,k)),i(B,R)["*"]&&b(this,q,Q).call(this,r,i(B,R)["*"],e,N,i(x,k))):(g(B,k,N),C.push(B)))}}const z=c.shift();o=z?C.concat(z):C}return r.length>1&&r.sort((u,v)=>u.score-v.score),[r.map(({handler:u,params:v})=>[u,v])]}},W=new WeakMap,R=new WeakMap,ae=new WeakMap,me=new WeakMap,k=new WeakMap,q=new WeakSet,Q=function(e,a,r,s,o){for(let n=0,c=i(a,W).length;n<c;n++){const l=i(a,W)[n],d=l[r]||l[y],p={};if(d!==void 0&&(d.params=Object.create(null),e.push(d),s!==ke||o&&o!==ke))for(let u=0,v=d.possibleKeys.length;u<v;u++){const A=d.possibleKeys[u],C=p[d.score];d.params[A]=o!=null&&o[A]&&!C?o[A]:s[A]??(o==null?void 0:o[A]),p[d.score]=!0}}},he),re,it,na=(it=class{constructor(){f(this,"name","TrieRouter");h(this,re);g(this,re,new ia)}add(t,e,a){const r=ct(e);if(r){for(let s=0,o=r.length;s<o;s++)i(this,re).insert(t,r[s],a);return}i(this,re).insert(t,e,a)}match(t,e){return i(this,re).search(t,e)}},re=new WeakMap,it),kt=class extends Wt{constructor(t={}){super(t),this.router=t.router??new sa({routers:[new ra,new na]})}},la=t=>{const e={origin:"*",allowMethods:["GET","HEAD","PUT","POST","DELETE","PATCH"],allowHeaders:[],exposeHeaders:[],...t},a=(s=>typeof s=="string"?s==="*"?()=>s:o=>s===o?o:null:typeof s=="function"?s:o=>s.includes(o)?o:null)(e.origin),r=(s=>typeof s=="function"?s:Array.isArray(s)?()=>s:()=>[])(e.allowMethods);return async function(o,n){var d;function c(p,u){o.res.headers.set(p,u)}const l=await a(o.req.header("origin")||"",o);if(l&&c("Access-Control-Allow-Origin",l),e.credentials&&c("Access-Control-Allow-Credentials","true"),(d=e.exposeHeaders)!=null&&d.length&&c("Access-Control-Expose-Headers",e.exposeHeaders.join(",")),o.req.method==="OPTIONS"){e.origin!=="*"&&c("Vary","Origin"),e.maxAge!=null&&c("Access-Control-Max-Age",e.maxAge.toString());const p=await r(o.req.header("origin")||"",o);p.length&&c("Access-Control-Allow-Methods",p.join(","));let u=e.allowHeaders;if(!(u!=null&&u.length)){const v=o.req.header("Access-Control-Request-Headers");v&&(u=v.split(/\s*,\s*/))}return u!=null&&u.length&&(c("Access-Control-Allow-Headers",u.join(",")),o.res.headers.append("Vary","Access-Control-Request-Headers")),o.res.headers.delete("Content-Length"),o.res.headers.delete("Content-Type"),new Response(null,{headers:o.res.headers,status:204,statusText:"No Content"})}await n(),e.origin!=="*"&&o.header("Vary","Origin",{append:!0})}};const m={fast:"@cf/meta/llama-3.2-3b-instruct",balanced:"@cf/meta/llama-3.1-8b-instruct-fp8",powerful:"@cf/meta/llama-3.3-70b-instruct-fp8-fast",coder:"@cf/qwen/qwen2.5-coder-32b-instruct",reason:"@cf/deepseek-ai/deepseek-r1-distill-qwen-32b",kimi:"@cf/moonshotai/kimi-k2.6",gpt:"@cf/openai/gpt-oss-120b",gemma:"@cf/google/gemma-3-12b-it"},X="https://api.sixtechbrasil.com.br",ca="https://sixtechworkspace.kainow252-cmyk.workers.dev",ve=[{id:"orchestrator",name:"Super Orquestrador",emoji:"🎯",color:"#22D3EE",category:"Orquestração",source:"cloudflare",model:m.kimi,basedOn:"Kimi K2.6 (1T params)",capabilities:["Roteamento inteligente","Síntese multi-agente","Planejamento","Delegação","Consolidação"],desc:"CEO da equipe — analisa, delega e sintetiza resultados de todos os agentes",system:`Você é o Super Agente Orquestrador da SixTech Brasil, powered by Kimi K2.6.
+Missão: ANALISAR → PLANEJAR → SINTETIZAR → DECIDIR. Seja o CEO da equipe.
+Responda SEMPRE em português brasileiro com markdown rico.`},{id:"analyst",name:"Analista",emoji:"📊",color:"#8B5CF6",category:"Orquestração",source:"cloudflare",model:m.reason,basedOn:"DeepSeek R1 32B",capabilities:["SWOT","KPIs","Chain-of-thought","BI","Cenários"],desc:"Raciocínio analítico avançado — DeepSeek R1 chain-of-thought, análise SWOT e KPIs",system:"Você é analista de elite da SixTech Brasil. Use chain-of-thought para analisar dados, KPIs, SWOT e cenários. Responda em português."},{id:"reviewer",name:"Revisor QA",emoji:"🛡️",color:"#10B981",category:"Orquestração",source:"cloudflare",model:m.balanced,basedOn:"Llama 3.1 8B",capabilities:["Code review","QA","Security audit","Scoring 0-10","Melhorias"],desc:"Revisor crítico — analisa qualidade com scoring rigoroso e sugestões concretas",system:"Você é QA Lead da SixTech. Analise com framework: Problemas, Positivos, Melhorias, Score 0-10. Seja direto e honesto. Responda em português."},{id:"chat-assistant",name:"Assistente",emoji:"💬",color:"#06B6D4",category:"Orquestração",source:"cloudflare",model:m.balanced,basedOn:"Llama 3.1 8B + SSE",capabilities:["Chat geral","Streaming","Multi-idioma","Contexto","Rápido"],desc:"Assistente conversacional com streaming SSE em tempo real",system:"Você é o assistente da SixTech Brasil. Seja útil, amigável e direto. Responda em português por padrão."},{id:"admin-secretary",name:"Secretária Executiva",emoji:"📅",color:"#6C63FF",category:"Administrativo",source:"cloudflare",model:m.balanced,capabilities:["Agendamentos","E-mails","Atas de reunião","Organização","Follow-up"],desc:"Organiza agenda, redige e-mails profissionais e gerencia comunicações executivas",system:"Você é secretária executiva sênior. Organize agendas, redija e-mails formais e atas de reunião com clareza e profissionalismo. Responda em português."},{id:"admin-processes",name:"Gestor de Processos",emoji:"⚙️",color:"#6C63FF",category:"Administrativo",source:"cloudflare",model:m.balanced,capabilities:["BPM","Fluxogramas","SOP","Automação","Indicadores"],desc:"Mapeia, documenta e otimiza processos administrativos e operacionais",system:"Você é especialista em BPM e gestão de processos. Mapeie fluxos, crie SOPs e identifique gargalos. Responda em português."},{id:"fin-controller",name:"Controller",emoji:"💰",color:"#F59E0B",category:"Financeiro",source:"cloudflare",model:m.reason,capabilities:["DRE","Fluxo de caixa","Budget","Variance","Relatórios"],desc:"Controller financeiro — DRE, fluxo de caixa, orçamento e análise de variações",system:"Você é controller financeiro sênior. Analise demonstrativos, cash flow, budget vs realizado. Use raciocínio estruturado. Responda em português."},{id:"fin-invest",name:"Analista de Investimentos",emoji:"📈",color:"#F59E0B",category:"Financeiro",source:"cloudflare",model:m.reason,capabilities:["Valuation","ROI","VPL/TIR","Carteira","Risco"],desc:"Análise de investimentos, valuation de empresas e gestão de portfólio",system:"Você é analista de investimentos. Calcule ROI, VPL, TIR, faça valuation e análise de risco. Responda em português com rigor quantitativo."},{id:"credit-analyst",name:"Analista de Crédito",emoji:"🏦",color:"#3B82F6",category:"Crédito",source:"cloudflare",model:m.reason,capabilities:["Score","Rating","Risco PF/PJ","Política de crédito","Cobrança"],desc:"Analisa perfil de crédito, score, rating e política de concessão PF e PJ",system:"Você é analista de crédito sênior. Avalie risco de crédito, score, rating e recomende política de concessão. Responda em português."},{id:"credit-recovery",name:"Gestor de Cobrança",emoji:"🔔",color:"#3B82F6",category:"Crédito",source:"cloudflare",model:m.balanced,capabilities:["Régua de cobrança","Negativação","Renegociação","Scripts","KPIs"],desc:"Estratégias de cobrança, réguas, scripts de negociação e renegociação de dívidas",system:"Você é gestor de recuperação de crédito. Crie réguas de cobrança, scripts de negociação e estratégias de renegociação. Responda em português."},{id:"insurance-broker",name:"Corretor de Seguros",emoji:"🛡️",color:"#0EA5E9",category:"Seguros",source:"cloudflare",model:m.balanced,capabilities:["Cotação","Coberturas","Sinistro","Vida/Auto/Patrimonial","Comparativo"],desc:"Especialista em seguros — cotações, coberturas, análise de apólices e sinistros",system:"Você é corretor de seguros especialista. Explique coberturas, compare apólices e oriente sobre sinistros. Responda em português."},{id:"legal",name:"Jurídico",emoji:"⚖️",color:"#D97706",category:"Jurídico",source:"hybrid",model:m.powerful,internalUrl:`${X}/agents/legal`,basedOn:"sixtech-workspace",capabilities:["Contratos","LGPD","NDAs","Compliance","Due diligence"],desc:"Especialista jurídico — contratos, LGPD, direito digital e compliance",system:"Você é especialista jurídico da SixTech. Analise contratos, LGPD, NDAs. DISCLAIMER: consulte advogado para casos reais. Responda em português."},{id:"legal-labor",name:"Trabalhista",emoji:"👷",color:"#D97706",category:"Jurídico",source:"cloudflare",model:m.powerful,capabilities:["CLT","eSocial","Rescisão","Folha","Convenção coletiva"],desc:"Direito trabalhista — CLT, eSocial, rescisões, folha e convenções coletivas",system:"Você é especialista em direito trabalhista brasileiro. Oriente sobre CLT, eSocial, rescisões e folha. DISCLAIMER: consulte advogado. Responda em português."},{id:"affiliate-manager",name:"Gestor de Afiliados",emoji:"🤝",color:"#7C3AED",category:"Afiliados",source:"cloudflare",model:m.balanced,capabilities:["Programa de afiliados","Comissões","Recrutamento","Métricas","Materiais"],desc:"Gerencia programas de afiliados, estrutura comissões e recruta parceiros",system:"Você é gestor de programas de afiliados. Estruture comissões, estratégias de recrutamento e métricas de performance. Responda em português."},{id:"marketing-content",name:"Criador de Conteúdo",emoji:"📢",color:"#EC4899",category:"Marketing",source:"hybrid",model:m.powerful,internalUrl:`${X}/agents/marketing`,capabilities:["Posts redes sociais","Blog SEO","Roteiros","E-mail marketing","Headlines"],desc:"Cria conteúdo persuasivo para redes sociais, blog, e-mail e campanhas",system:"Você é criador de conteúdo de marketing. Crie posts virais, artigos SEO e e-mails persuasivos. Tom: engajante e autêntico. Responda em português."},{id:"marketing-growth",name:"Growth Hacker",emoji:"🚀",color:"#EC4899",category:"Marketing",source:"cloudflare",model:m.powerful,capabilities:["Funil","A/B Testing","CAC/LTV","Paid ads","Automação"],desc:"Estratégias de crescimento acelerado — funil, paid ads, A/B test e automação",system:"Você é growth hacker sênior. Proponha experimentos de crescimento, otimize funil, CAC/LTV e estratégias paid. Responda em português."},{id:"sales-hunter",name:"Vendedor Hunter",emoji:"📞",color:"#059669",category:"Comercial",source:"cloudflare",model:m.balanced,capabilities:["Prospecção","Cold call","Pitch","Objeções","CRM"],desc:"Especialista em prospecção ativa — scripts de vendas, pitch e gestão de objeções",system:"Você é vendedor hunter sênior. Crie scripts de prospecção, pitches matadores e respostas a objeções. Responda em português com energia."},{id:"sales-closer",name:"Closer",emoji:"🏆",color:"#059669",category:"Comercial",source:"cloudflare",model:m.balanced,capabilities:["Fechamento","Proposta comercial","Negociação","Up-sell","Contrato"],desc:"Especialista em fechamento de vendas — propostas, negociação e contratos",system:"Você é closer de vendas. Ajude a fechar negócios com propostas irresistíveis, técnicas de negociação e contratos. Responda em português."},{id:"realestate-agent",name:"Corretor Imobiliário",emoji:"🏠",color:"#0891B2",category:"Imobiliário",source:"cloudflare",model:m.balanced,capabilities:["Avaliação","Captação","Financiamento","Documentação","Negociação"],desc:"Corretor especializado — avaliação, captação, financiamento e documentação",system:"Você é corretor imobiliário experiente. Oriente sobre avaliação, financiamento e documentação de imóveis. Responda em português."},{id:"hr-recruiter",name:"Recrutador",emoji:"👥",color:"#7C3AED",category:"RH",source:"cloudflare",model:m.balanced,capabilities:["Job description","Triagem","Entrevista","Assessment","Onboarding"],desc:"Recrutamento e seleção — job descriptions, entrevistas e onboarding",system:"Você é recrutador sênior. Crie JDs atrativas, roteiros de entrevista e processos de onboarding. Responda em português."},{id:"hr-training",name:"T&D",emoji:"🎓",color:"#7C3AED",category:"RH",source:"cloudflare",model:m.balanced,capabilities:["LNT","Trilhas","Treinamentos","Avaliação de desempenho","PDI"],desc:"Treinamento e Desenvolvimento — LNT, trilhas de aprendizado e PDI",system:"Você é especialista em T&D. Crie LNT, trilhas de aprendizado e PDI para desenvolvimento de pessoas. Responda em português."},{id:"health-manager",name:"Gestor de Saúde",emoji:"🏥",color:"#EF4444",category:"Saúde",source:"cloudflare",model:m.powerful,capabilities:["Gestão hospitalar","Protocolos","ANVISA","Qualidade","Indicadores"],desc:"Gestão de saúde — protocolos, indicadores, ANVISA e qualidade assistencial",system:"Você é gestor de saúde. Oriente sobre gestão hospitalar, protocolos e indicadores. DISCLAIMER: não substitui médico. Responda em português."},{id:"auto-consultant",name:"Consultor Automotivo",emoji:"🚗",color:"#6366F1",category:"Automotivo",source:"cloudflare",model:m.balanced,capabilities:["Precificação","Financiamento","Estoque","Revisão","Consórcio"],desc:"Especialista automotivo — precificação, financiamento, consórcio e estoque",system:"Você é consultor automotivo. Oriente sobre compra, venda, financiamento e manutenção de veículos. Responda em português."},{id:"logistics-manager",name:"Gestor Logístico",emoji:"🚚",color:"#78350F",category:"Logística",source:"cloudflare",model:m.balanced,capabilities:["Supply chain","Rotas","Estoque","WMS","KPIs logísticos"],desc:"Supply chain e logística — rotas, estoque, WMS e indicadores de performance",system:"Você é gestor logístico. Otimize rotas, supply chain, WMS e indicadores logísticos. Responda em português."},{id:"tourism-agent",name:"Agente de Viagens",emoji:"🌍",color:"#0284C7",category:"Turismo",source:"cloudflare",model:m.balanced,capabilities:["Roteiros","Pacotes","Documentos","Passagens","Hospedagem"],desc:"Especialista em viagens — roteiros, pacotes, documentação e hospedagem",system:"Você é agente de viagens experiente. Crie roteiros, recomende pacotes e oriente sobre documentação. Responda em português."},{id:"edu-planner",name:"Planejador Educacional",emoji:"📚",color:"#16A34A",category:"Educação",source:"cloudflare",model:m.powerful,capabilities:["Plano de aula","Currículo","EAD","Avaliação","BNCC"],desc:"Planejamento educacional — planos de aula, currículo, EAD e alinhamento BNCC",system:"Você é especialista em educação. Crie planos de aula, currículos e materiais didáticos alinhados à BNCC. Responda em português."},{id:"developer",name:"Developer",emoji:"💻",color:"#F87171",category:"Tecnologia",source:"hybrid",model:m.coder,internalUrl:`${X}/agents/developer`,basedOn:"OpenHands + Qwen2.5 Coder 32B",capabilities:["Código","APIs","Docker","Banco de dados","DevOps"],desc:"Arquiteto de software sênior — código production-ready com Qwen2.5 Coder 32B",system:"Você é arquiteto de software sênior da SixTech. Gere código limpo, documentado e testável. Responda em português com blocos de código."},{id:"designer",name:"Designer",emoji:"🎨",color:"#EC4899",category:"Tecnologia",source:"hybrid",model:m.powerful,internalUrl:`${X}/agents/designer`,basedOn:"sixtech-workspace",capabilities:["UI/UX","Branding","HTML/CSS","Figma","Acessibilidade"],desc:"Designer sênior — UI/UX, branding, sistemas de design e HTML/CSS",system:"Você é designer criativo sênior. Proponha soluções visuais com paleta, tipografia e componentes. Responda em português."},{id:"tech-infra",name:"Infraestrutura",emoji:"🖥️",color:"#475569",category:"Tecnologia",source:"cloudflare",model:m.coder,capabilities:["Cloud AWS/GCP","Kubernetes","CI/CD","Segurança","Monitoramento"],desc:"Especialista em infra — Cloud, Kubernetes, CI/CD e segurança de sistemas",system:"Você é especialista em infraestrutura cloud. Oriente sobre AWS/GCP, K8s, CI/CD e segurança. Responda em português com exemplos técnicos."},{id:"industry-engineer",name:"Engenheiro Industrial",emoji:"🏭",color:"#92400E",category:"Indústria",source:"cloudflare",model:m.balanced,capabilities:["Lean","Six Sigma","PCP","Manutenção","ISO"],desc:"Engenharia industrial — Lean, Six Sigma, PCP e gestão de qualidade ISO",system:"Você é engenheiro industrial. Aplique Lean, Six Sigma e PCP para otimizar processos produtivos. Responda em português."},{id:"agro-consultant",name:"Consultor Agro",emoji:"🌾",color:"#65A30D",category:"Agronegócio",source:"cloudflare",model:m.balanced,capabilities:["Gestão rural","Crédito rural","Comercialização","Pragas","Rastreabilidade"],desc:"Agronegócio — gestão rural, crédito, comercialização e rastreabilidade",system:"Você é consultor agronegócio. Oriente sobre gestão rural, crédito e comercialização de commodities. Responda em português."},{id:"gov-analyst",name:"Analista de Governo",emoji:"🏛️",color:"#1D4ED8",category:"Governo",source:"cloudflare",model:m.powerful,capabilities:["Licitações","Lei 8.666","Nova Lei Licitações","Editais","Pregão"],desc:"Especialista em governo — licitações, editais, pregão e Lei 14.133/2021",system:"Você é analista de contratos públicos. Oriente sobre licitações, editais e Lei 14.133. DISCLAIMER: consulte advogado. Responda em português."},{id:"creative-writer",name:"Redator Criativo",emoji:"✍️",color:"#BE185D",category:"Criativo",source:"cloudflare",model:m.powerful,capabilities:["Copywriting","Storytelling","Roteiros","Naming","Slogans"],desc:"Redator criativo — copy, storytelling, roteiros, naming e slogans impactantes",system:"Você é redator criativo sênior. Crie copy persuasivo, histórias envolventes e slogans memoráveis. Responda em português com criatividade."},{id:"creative-video",name:"Roteirista de Vídeo",emoji:"🎬",color:"#BE185D",category:"Criativo",source:"cloudflare",model:m.powerful,capabilities:["Roteiro","Script","YouTube","Reels","Storytelling visual"],desc:"Roteiros para YouTube, Reels, TikTok e vídeos corporativos",system:"Você é roteirista audiovisual. Crie roteiros para YouTube, Reels e vídeos corporativos com estrutura narrativa forte. Responda em português."},{id:"ceo-advisor",name:"Conselheiro CEO",emoji:"👑",color:"#92400E",category:"Diretoria",source:"cloudflare",model:m.kimi,basedOn:"Kimi K2.6 (1T params)",capabilities:["Estratégia","M&A","Board","Visão 10 anos","Liderança"],desc:"Conselheiro estratégico de alto nível — decisões de CEO, M&A e visão de longo prazo",system:"Você é conselheiro sênior de CEO. Oriente sobre estratégia corporativa, M&A, liderança e visão de longo prazo. Responda em português com autoridade."},{id:"research",name:"Pesquisador",emoji:"🔍",color:"#6C63FF",category:"Diretoria",source:"hybrid",model:m.powerful,internalUrl:`${X}/agents/research`,basedOn:"sixtech-workspace",capabilities:["Pesquisa de mercado","Competitivo","Tendências","Inteligência","Relatórios"],desc:"Inteligência de mercado — pesquisa profunda, análise competitiva e tendências",system:"Você é pesquisador de inteligência de mercado. Estruture: Resumo → Análise → Dados → Tendências → Conclusões. Responda em português."},{id:"documents",name:"Documentos",emoji:"📄",color:"#14B8A6",category:"Diretoria",source:"hybrid",model:m.balanced,internalUrl:`${X}/agents/documents`,basedOn:"sixtech-workspace",capabilities:["Relatórios executivos","Propostas","Specs","Apresentações","PRD"],desc:"Documentação executiva — relatórios, PRD, propostas e apresentações",system:"Você é especialista em documentação executiva. Crie relatórios, PRDs e propostas com clareza e precisão. Responda em português."}];async function da(t,e){try{const a=new AbortController,r=setTimeout(()=>a.abort(),8e3),s=await fetch(t,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({task:e,message:e}),signal:a.signal});if(clearTimeout(r),!s.ok)return null;const o=await s.json();return o.result||o.response||o.output||null}catch{return null}}async function Ze(t,e,a,r,s=1200){const o=[{role:"system",content:a},{role:"user",content:r}],n=await t.run(e,{messages:o,max_tokens:s});return n&&typeof n=="object"&&"response"in n?n.response||"":String(n||"")}async function Ue(t,e,a){const r=Date.now();let s="",o=!1,n=t.source;try{if(t.source==="hybrid"&&t.internalUrl){const c=await da(t.internalUrl,e);c?(s=c,n="internal",o=!1):(s=await Ze(a,t.model,t.system,e,1500),n="cloudflare",o=!0)}else s=await Ze(a,t.model,t.system,e,1500),n="cloudflare",o=!1}catch(c){s=`❌ Erro: ${(c==null?void 0:c.message)||"falha inesperada"}`}return{agentId:t.id,name:t.name,emoji:t.emoji,color:t.color,model:t.model,source:n,usedFallback:o,response:s,duration:Date.now()-r}}function pa(t){const e=t.toLowerCase(),a=[];return/código|code|api|sistema|função|script|bug|deploy|docker|sql|banco|database|programar|desenvolver|criar.*app/.test(e)&&a.push("developer"),/contrato|nda|legal|jurídico|lgpd|compliance|cláusula|acordo|lei|direito|privacy/.test(e)&&a.push("legal"),/design|logo|ui|ux|interface|layout|cor|paleta|branding|wireframe|figma|css|visual/.test(e)&&a.push("designer"),/pesquis|research|mercado|concorrent|trend|análise|dados|market|investigar|buscar/.test(e)&&a.push("research"),/relatório|documento|report|proposta|spec|documentaç|apresent|manual|readme|word|pdf/.test(e)&&a.push("documents"),/analise|analisa|kpi|métrica|swot|negócio|estratégia|financeiro|projeção|cenário/.test(e)&&a.push("analyst"),/revisar|review|qualidade|verificar|corrigir|melhorar|audit|checar|validar/.test(e)&&a.push("reviewer"),a.length===0&&a.push("orchestrator"),a.length>1&&a.push("orchestrator"),[...new Set(a)]}const I=new kt;I.use("*",la());I.get("/favicon.ico",t=>new Response(null,{status:204}));I.get("/api/agents",t=>t.json({total:ve.length,models:Object.keys(m).length,repos:["sixtech-workspace","sixtechworkspace","kndev-IA","sixtechbrasil"],agents:ve.map(e=>({id:e.id,name:e.name,emoji:e.emoji,color:e.color,desc:e.desc,source:e.source,model:e.model,category:e.category,capabilities:e.capabilities,basedOn:e.basedOn,internalUrl:e.internalUrl}))}));I.post("/api/agent/:id",async t=>{const e=ve.find(o=>o.id===t.req.param("id"));if(!e)return t.json({error:"Agente não encontrado"},404);const{message:a,task:r}=await t.req.json(),s=await Ue(e,a||r||"",t.env.AI);return t.json(s)});I.post("/api/orchestrate",async t=>{var c;const{task:e,message:a}=await t.req.json(),r=e||a||"";if(!r)return t.json({error:"task obrigatório"},400);const s=pa(r),o=s.map(l=>ve.find(d=>d.id===l)).filter(Boolean),n=[];for(const l of o){const d=l.id==="orchestrator"&&n.length>0?`Tarefa original: "${r}"
 
 Resultados dos agentes especializados:
-${i.map(u=>`## ${u.emoji} ${u.name}
-${u.response}`).join(`
+${n.map(p=>`## ${p.emoji} ${p.name}
+${p.response}`).join(`
 
 `)}
 
-Sintetize e entregue o resultado final consolidado.`:a;i.push(await ze(l,d,t.env.AI))}return t.json({task:a,agentsUsed:r,results:i,summary:((c=i[i.length-1])==null?void 0:c.response)||""})});$.post("/api/pipeline",async t=>{const{task:e,agentIds:s}=await t.req.json();if(!e||!(s!=null&&s.length))return t.json({error:"task e agentIds obrigatórios"},400);const a=s.map(l=>ve.find(d=>d.id===l)).filter(Boolean),r=[];let o=e;for(const l of a){a[a.length-1];const d=r.length===0?e:l.id==="orchestrator"&&r.length>0?`Tarefa original: "${e}"
+Sintetize e entregue o resultado final consolidado.`:r;n.push(await Ue(l,d,t.env.AI))}return t.json({task:r,agentsUsed:s,results:n,summary:((c=n[n.length-1])==null?void 0:c.response)||""})});I.post("/api/pipeline",async t=>{const{task:e,agentIds:a}=await t.req.json();if(!e||!(a!=null&&a.length))return t.json({error:"task e agentIds obrigatórios"},400);const r=a.map(l=>ve.find(d=>d.id===l)).filter(Boolean),s=[];let o=e;for(const l of r){r[r.length-1];const d=s.length===0?e:l.id==="orchestrator"&&s.length>0?`Tarefa original: "${e}"
 
-${r.map(p=>`## ${p.emoji} ${p.name}
-${p.response}`).join(`
+${s.map(u=>`## ${u.emoji} ${u.name}
+${u.response}`).join(`
 
 `)}
 
 Sintetize o resultado final.`:`${e}
 
-[Contexto do ${r[r.length-1].name}]:
-${r[r.length-1].response.slice(0,800)}`,u=await ze(l,d,t.env.AI);r.push(u),o=u.response}const i=r.filter(l=>l.source==="cloudflare").length,c=r.filter(l=>l.source==="internal").length;return t.json({task:e,steps:r.length,cloudflareSteps:i,internalSteps:c,results:r,final:o})});$.post("/api/chat",async t=>{const{messages:e,model:s}=await t.req.json(),a=s||C.balanced;e.some(o=>o.role==="system")||e.unshift({role:"system",content:`Você é o assistente inteligente da SixTech Brasil — plataforma multiagente de IA.
+[Contexto do ${s[s.length-1].name}]:
+${s[s.length-1].response.slice(0,800)}`,p=await Ue(l,d,t.env.AI);s.push(p),o=p.response}const n=s.filter(l=>l.source==="cloudflare").length,c=s.filter(l=>l.source==="internal").length;return t.json({task:e,steps:s.length,cloudflareSteps:n,internalSteps:c,results:s,final:o})});I.post("/api/chat",async t=>{const{messages:e,model:a}=await t.req.json(),r=a||m.balanced;e.some(o=>o.role==="system")||e.unshift({role:"system",content:`Você é o assistente inteligente da SixTech Brasil — plataforma multiagente de IA.
 Seja útil, preciso e responda em português brasileiro por padrão.
-Se o usuário falar inglês, responda em inglês.`});const r=await t.env.AI.run(a,{messages:e,max_tokens:2048,stream:!0});return new Response(r,{headers:{"Content-Type":"text/event-stream; charset=utf-8","Cache-Control":"no-cache",Connection:"keep-alive","Access-Control-Allow-Origin":"*"}})});$.get("/api/models",t=>t.json({models:Object.entries(C).map(([e,s])=>({key:e,id:s,label:{fast:"⚡ Llama 3.2 3B — Rápido",balanced:"⚖️ Llama 3.1 8B — Balanceado",powerful:"💪 Llama 3.3 70B — Poderoso",coder:"💻 Qwen2.5 Coder 32B — Código",reason:"🧠 DeepSeek R1 32B — Raciocínio",kimi:"🎯 Kimi K2.6 1T — Orquestrador",gpt:"🤖 GPT-OSS 120B — Avançado",gemma:"💎 Gemma 3 12B — Google"}[e]||e}))}));$.get("/api/status",t=>t.json({status:"online",version:"3.0.0",platform:"SixTech MAS — Multi-Agent System",repos:{"sixtech-workspace":{agents:5,type:"Python FastAPI + Ollama",url:ce},sixtechworkspace:{type:"Cloudflare Workers AI + SSE",url:cs},"kndev-IA":{type:"OpenHands + opencode (RAR)",note:"Integrado ao developer agent"},sixtechbrasil:{type:"CF Pages — plataforma principal",url:"https://sixtechbrasil.pages.dev"}},agents:ve.length,models:Object.keys(C).length,features:["hybrid routing","SSE streaming","smart orchestration","pipeline mode","fallback chain"],timestamp:new Date().toISOString()}));$.get("/",t=>t.html(`<!DOCTYPE html>
+Se o usuário falar inglês, responda em inglês.`});const s=await t.env.AI.run(r,{messages:e,max_tokens:2048,stream:!0});return new Response(s,{headers:{"Content-Type":"text/event-stream; charset=utf-8","Cache-Control":"no-cache",Connection:"keep-alive","Access-Control-Allow-Origin":"*"}})});I.get("/api/models",t=>t.json({models:Object.entries(m).map(([e,a])=>({key:e,id:a,label:{fast:"⚡ Llama 3.2 3B — Rápido",balanced:"⚖️ Llama 3.1 8B — Balanceado",powerful:"💪 Llama 3.3 70B — Poderoso",coder:"💻 Qwen2.5 Coder 32B — Código",reason:"🧠 DeepSeek R1 32B — Raciocínio",kimi:"🎯 Kimi K2.6 1T — Orquestrador",gpt:"🤖 GPT-OSS 120B — Avançado",gemma:"💎 Gemma 3 12B — Google"}[e]||e}))}));I.get("/api/status",t=>t.json({status:"online",version:"3.0.0",platform:"SixTech MAS — Multi-Agent System",repos:{"sixtech-workspace":{agents:5,type:"Python FastAPI + Ollama",url:X},sixtechworkspace:{type:"Cloudflare Workers AI + SSE",url:ca},"kndev-IA":{type:"OpenHands + opencode (RAR)",note:"Integrado ao developer agent"},sixtechbrasil:{type:"CF Pages — plataforma principal",url:"https://sixtechbrasil.pages.dev"}},agents:ve.length,models:Object.keys(m).length,features:["hybrid routing","SSE streaming","smart orchestration","pipeline mode","fallback chain"],timestamp:new Date().toISOString()}));I.get("/",t=>t.html(`<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SixTech MAS — Multi-Agent System v3.0</title>
-<script src="https://cdn.tailwindcss.com"><\/script>
+<title>SixTech MAS v3.0</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
 <style>
-  :root {
-    --primary: #6C63FF; --secondary: #22D3EE; --accent: #EC4899;
-    --bg: #0B0D17; --surface: #141622; --card: #1B1E2E;
-    --border: #2A2D40; --text: #E8E9F3; --muted: #6B7280;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: var(--bg); color: var(--text); font-family: 'Inter', system-ui, sans-serif; min-height: 100vh; }
-  ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: var(--bg); }
-  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-  .gradient-text { background: linear-gradient(135deg, var(--primary), var(--secondary)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
-  .glass { background: rgba(27,30,46,0.8); backdrop-filter: blur(12px); border: 1px solid var(--border); }
-  .agent-card { transition: all .2s; }
-  .agent-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(108,99,255,.2); }
-  .tab-btn { transition: all .2s; border-bottom: 2px solid transparent; }
-  .tab-btn.active { border-bottom-color: var(--primary); color: white; }
-  .tab-panel { display: none; } .tab-panel.active { display: block; }
-  .badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
-  .badge-cf { background: #1e3a5f; color: #60A5FA; }
-  .badge-hybrid { background: #1e2d1e; color: #34D399; }
-  .badge-int { background: #2d1e1e; color: #F87171; }
-  .progress-step { transition: all .3s; }
-  .progress-step.done { opacity: 1; } .progress-step.pending { opacity: .4; }
-  .msg-user { background: linear-gradient(135deg, #1e1b4b, #312e81); border-left: 3px solid var(--primary); }
-  .msg-ai { background: var(--card); border-left: 3px solid var(--secondary); }
-  .result-card { animation: slideIn .3s ease; }
-  @keyframes slideIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-  .pulse-dot { animation: pulse 2s infinite; }
-  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
-  .spin { animation: spin 1s linear infinite; }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  pre code { font-family: 'Fira Code', monospace; font-size: 13px; }
-  .cap-pill { background: rgba(108,99,255,.15); color: #a5b4fc; border: 1px solid rgba(108,99,255,.3); border-radius: 999px; padding: 2px 8px; font-size: 11px; }
-  textarea:focus, input:focus, select:focus { outline: none; border-color: var(--primary) !important; box-shadow: 0 0 0 2px rgba(108,99,255,.2); }
-  .model-opt { padding: 6px 10px; background: var(--card); color: var(--text); border: none; }
-  .typing-cursor { display: inline-block; width: 2px; height: 1em; background: var(--secondary); animation: blink .7s infinite; vertical-align: text-bottom; margin-left: 2px; }
-  @keyframes blink { 0%,100%{opacity:1}50%{opacity:0} }
+/* ── Reset & Vars ─────────────────────────────────────────── */
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --primary:#6C63FF;--secondary:#22D3EE;--accent:#EC4899;
+  --bg:#0B0D17;--surface:#111320;--card:#1B1E2E;
+  --border:#2A2D40;--text:#E8E9F3;--muted:#6B7280;
+  --sidebar-w:240px;--header-h:54px;
+}
+html,body{height:100%;overflow:hidden}
+body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-serif;display:flex;flex-direction:column}
+::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:var(--bg)}::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+/* ── Header ───────────────────────────────────────────────── */
+header{
+  height:var(--header-h);flex-shrink:0;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 16px;
+  background:rgba(17,19,32,0.95);backdrop-filter:blur(10px);
+  border-bottom:1px solid var(--border);
+  position:relative;z-index:100;
+}
+.hdr-left{display:flex;align-items:center;gap:10px}
+.hdr-logo{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,#6C63FF,#22D3EE);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.hdr-title{font-weight:700;font-size:15px;color:#fff;line-height:1.2}
+.hdr-sub{font-size:10px;color:var(--muted)}
+.hdr-badge{font-size:10px;padding:1px 6px;border-radius:999px;background:#1e3a5f;color:#60A5FA;margin-left:6px;vertical-align:middle}
+.hdr-right{display:flex;align-items:center;gap:10px}
+.status-pill{display:flex;align-items:center;gap:5px;font-size:11px;color:#34D399}
+.pulse{width:7px;height:7px;border-radius:50%;background:#34D399;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.btn-gh{display:flex;align-items:center;gap:6px;padding:5px 12px;border-radius:8px;background:var(--card);border:1px solid var(--border);color:var(--text);font-size:12px;text-decoration:none;cursor:pointer}
+.btn-gh:hover{background:var(--border)}
+.btn-sidebar-toggle{background:none;border:none;color:var(--text);cursor:pointer;font-size:16px;padding:6px;border-radius:6px;transition:background .15s}
+.btn-sidebar-toggle:hover{background:var(--card)}
+
+/* ── Layout Body ──────────────────────────────────────────── */
+.app-body{flex:1;display:flex;overflow:hidden}
+
+/* ── Sidebar ──────────────────────────────────────────────── */
+aside{
+  width:var(--sidebar-w);flex-shrink:0;overflow-y:auto;
+  background:var(--surface);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;
+  transition:width .22s ease, transform .22s ease;
+}
+aside.collapsed{width:0;overflow:hidden}
+
+.sidebar-section{padding:12px 0 4px}
+.sidebar-section-title{
+  padding:4px 14px 6px;font-size:10px;font-weight:700;letter-spacing:.08em;
+  color:var(--muted);text-transform:uppercase;
+}
+.nav-item{
+  display:flex;align-items:center;gap:9px;
+  padding:9px 14px;cursor:pointer;
+  font-size:13px;color:var(--muted);
+  border-left:3px solid transparent;
+  transition:all .15s;white-space:nowrap;overflow:hidden;
+}
+.nav-item:hover{background:rgba(108,99,255,.08);color:var(--text)}
+.nav-item.active{background:rgba(108,99,255,.12);color:#fff;border-left-color:var(--primary)}
+.nav-item i{width:16px;text-align:center;font-size:13px;flex-shrink:0}
+.nav-arrow{font-size:10px;color:var(--muted);padding-left:18px;margin-top:-4px}
+
+.sidebar-stat{padding:12px 14px;border-top:1px solid var(--border);margin-top:auto}
+.sidebar-stat-title{font-size:10px;color:var(--muted);font-weight:700;letter-spacing:.07em;text-transform:uppercase;margin-bottom:8px}
+.sstat{display:flex;justify-content:space-between;align-items:center;padding:3px 0;font-size:11px;color:var(--muted)}
+.sstat-val{color:var(--text);font-weight:600}
+
+/* ── Main Content ─────────────────────────────────────────── */
+main{flex:1;overflow-y:auto;display:flex;flex-direction:column}
+.tab-panel{display:none;flex:1;padding:20px}
+.tab-panel.active{display:flex;flex-direction:column;gap:16px}
+
+/* ── Cards ────────────────────────────────────────────────── */
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px}
+.card-title{font-size:13px;font-weight:600;color:#fff;margin-bottom:12px;display:flex;align-items:center;gap:7px}
+.card-title i{font-size:12px}
+
+/* ── Grid helpers ─────────────────────────────────────────── */
+.grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+.grid-2{display:grid;grid-template-columns:1fr 2fr;gap:14px}
+.grid-chat{display:grid;grid-template-columns:220px 1fr;gap:14px}
+.col-span-2{grid-column:span 2}
+.col-left{display:flex;flex-direction:column;gap:12px}
+
+/* ── Form elements ────────────────────────────────────────── */
+textarea,input[type=text],select{
+  width:100%;background:var(--bg);border:1px solid var(--border);
+  color:var(--text);border-radius:10px;padding:9px 12px;
+  font-size:13px;font-family:inherit;resize:none;
+}
+textarea:focus,input:focus,select:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 2px rgba(108,99,255,.18)}
+select option{background:var(--card)}
+
+/* ── Buttons ──────────────────────────────────────────────── */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:9px 16px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;border:none;transition:opacity .15s}
+.btn:hover{opacity:.85}
+.btn-primary{background:linear-gradient(135deg,var(--primary),#4f46e5);color:#fff}
+.btn-success{background:linear-gradient(135deg,#059669,#10b981);color:#fff}
+.btn-ghost{background:var(--surface);border:1px solid var(--border);color:var(--muted)}
+.btn-icon{padding:9px 11px}
+.btn-full{width:100%;margin-top:10px}
+
+/* ── Badges ───────────────────────────────────────────────── */
+.badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:700}
+.badge-cf{background:#1e3a5f;color:#60A5FA}
+.badge-hybrid{background:#1e2d1e;color:#34D399}
+.badge-int{background:#2d1e1e;color:#F87171}
+
+/* ── Pipeline ─────────────────────────────────────────────── */
+.agent-check-item{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;cursor:pointer;transition:background .12s}
+.agent-check-item:hover{background:rgba(255,255,255,.04)}
+.agent-check-item input{accent-color:var(--primary);flex-shrink:0}
+.checklist-scroll{max-height:220px;overflow-y:auto;display:flex;flex-direction:column;gap:2px}
+.mode-label{display:flex;align-items:flex-start;gap:10px;cursor:pointer;padding:6px 0}
+.mode-label input{margin-top:3px;accent-color:var(--primary)}
+.mode-title{font-size:13px;font-weight:500;color:#fff}
+.mode-sub{font-size:11px;color:var(--muted)}
+#progress-bar{display:none}
+.progress-steps{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.progress-step{padding:4px 10px;border-radius:6px;font-size:11px;background:var(--surface);border:1px solid var(--border);color:var(--muted);transition:all .3s}
+.progress-step.done{background:rgba(52,211,153,.1);border-color:#34D399;color:#34D399}
+.progress-step.active-step{background:rgba(108,99,255,.15);border-color:var(--primary);color:#fff}
+#results-container{display:flex;flex-direction:column;gap:12px}
+.result-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;animation:slideIn .28s ease}
+@keyframes slideIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.result-header{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.result-emoji{font-size:20px}
+.result-name{font-size:13px;font-weight:600;color:#fff}
+.result-model{font-size:10px;color:var(--muted)}
+.result-body{font-size:13px;color:var(--text);line-height:1.6}
+.result-footer{display:flex;align-items:center;gap:10px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);font-size:11px;color:var(--muted)}
+#results-placeholder{text-align:center;padding:60px 20px}
+#results-placeholder .ph-emoji{font-size:48px;margin-bottom:12px}
+#results-placeholder .ph-title{font-size:14px;font-weight:600;color:#fff;margin-bottom:6px}
+#results-placeholder .ph-sub{font-size:12px;color:var(--muted)}
+
+/* ── Chat ─────────────────────────────────────────────────── */
+.chat-box{display:flex;flex-direction:column;height:calc(100vh - var(--header-h) - 60px);background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden}
+.chat-hdr{padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.chat-msgs{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px}
+.msg{border-radius:10px;padding:12px 14px;font-size:13px;line-height:1.6}
+.msg-ai{background:var(--surface);border-left:3px solid var(--secondary)}
+.msg-user{background:rgba(108,99,255,.12);border-left:3px solid var(--primary)}
+.msg-name{font-size:11px;font-weight:600;margin-bottom:5px}
+.msg-name.ai{color:var(--secondary)}
+.msg-name.user{color:var(--primary)}
+.chat-input-row{padding:12px;border-top:1px solid var(--border);display:flex;gap:8px;flex-shrink:0}
+#chat-input{resize:none;height:60px}
+#typing-indicator{display:none;padding:4px 16px;font-size:11px;color:var(--muted)}
+.typing-dot{width:6px;height:6px;border-radius:50%;background:var(--secondary);display:inline-block;animation:pulse 1.2s infinite;margin-right:3px}
+.cursor-blink{display:inline-block;width:2px;height:1em;background:var(--secondary);animation:blink .7s infinite;vertical-align:text-bottom;margin-left:2px}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+
+/* ── Agents grid ──────────────────────────────────────────── */
+.agents-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
+.agent-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;transition:transform .18s,box-shadow .18s;cursor:default}
+.agent-card:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(108,99,255,.18)}
+.agent-card-hdr{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.agent-icon{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.agent-card-name{font-size:13px;font-weight:600;color:#fff}
+.agent-card-model{font-size:10px;color:var(--muted);margin-top:1px}
+.agent-card-desc{font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:10px}
+.caps{display:flex;flex-wrap:wrap;gap:4px}
+.cap-pill{font-size:10px;padding:2px 7px;border-radius:999px;background:rgba(108,99,255,.12);color:#a5b4fc;border:1px solid rgba(108,99,255,.25)}
+
+/* ── Stats ────────────────────────────────────────────────── */
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px}
+.stat-val{font-size:28px;font-weight:800;line-height:1}
+.stat-label{font-size:11px;color:var(--muted);margin-top:5px}
+.gtext{background:linear-gradient(135deg,var(--primary),var(--secondary));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+
+/* ── Filters ──────────────────────────────────────────────── */
+.filter-bar{display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+.filter-btn{padding:5px 12px;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;border:none;background:var(--card);color:var(--muted);transition:all .15s}
+.filter-btn.active{background:var(--primary);color:#fff}
+.filter-btn:hover:not(.active){background:var(--border);color:var(--text)}
+
+/* ── Responsive ───────────────────────────────────────────── */
+@media(max-width:860px){
+  .grid-2,.grid-chat{grid-template-columns:1fr}
+  .stats-grid{grid-template-columns:1fr 1fr}
+  .grid-3{grid-template-columns:1fr}
+  .col-span-2{grid-column:span 1}
+}
+@media(max-width:540px){
+  .stats-grid{grid-template-columns:1fr}
+  aside{position:fixed;top:var(--header-h);left:0;height:calc(100vh - var(--header-h));z-index:200;transform:translateX(0)}
+  aside.collapsed{transform:translateX(-100%);width:var(--sidebar-w)}
+  .sidebar-overlay{display:block}
+}
+.sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:190}
+.spin{animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── Modal Agente ─────────────────────────────────────────── */
+.modal-backdrop{
+  display:none;position:fixed;inset:0;z-index:500;
+  background:rgba(0,0,0,.72);backdrop-filter:blur(4px);
+  align-items:center;justify-content:center;
+}
+.modal-backdrop.open{display:flex}
+.modal-box{
+  width:min(680px,96vw);max-height:90vh;
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:18px;display:flex;flex-direction:column;
+  overflow:hidden;animation:modalIn .22s ease;
+}
+@keyframes modalIn{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+.modal-hdr{
+  display:flex;align-items:center;gap:12px;
+  padding:16px 20px;border-bottom:1px solid var(--border);
+  flex-shrink:0;
+}
+.modal-agent-icon{width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0}
+.modal-agent-name{font-size:16px;font-weight:700;color:#fff}
+.modal-agent-sub{font-size:11px;color:var(--muted);margin-top:2px}
+.modal-close{
+  margin-left:auto;background:none;border:none;color:var(--muted);
+  font-size:20px;cursor:pointer;padding:4px 8px;border-radius:6px;
+  line-height:1;transition:color .15s;
+}
+.modal-close:hover{color:#fff}
+.modal-caps{display:flex;flex-wrap:wrap;gap:4px;padding:10px 20px;border-bottom:1px solid var(--border);flex-shrink:0}
+.modal-msgs{
+  flex:1;overflow-y:auto;
+  padding:16px 20px;display:flex;flex-direction:column;gap:10px;
+  min-height:200px;max-height:420px;
+}
+.modal-msg{border-radius:10px;padding:10px 14px;font-size:13px;line-height:1.6}
+.modal-msg.ai{background:var(--card);border-left:3px solid var(--secondary)}
+.modal-msg.user{background:rgba(108,99,255,.12);border-left:3px solid var(--primary)}
+.modal-msg .mn{font-size:11px;font-weight:600;margin-bottom:4px}
+.modal-msg .mn.ai{color:var(--secondary)}
+.modal-msg .mn.user{color:var(--primary)}
+.modal-typing{display:none;padding:4px 20px;font-size:11px;color:var(--muted);flex-shrink:0}
+.modal-input-row{
+  display:flex;gap:8px;padding:12px 20px;
+  border-top:1px solid var(--border);flex-shrink:0;
+}
+.modal-input-row textarea{
+  flex:1;height:52px;resize:none;font-size:13px;
+}
+.modal-send{
+  height:52px;padding:0 18px;border-radius:10px;
+  background:linear-gradient(135deg,var(--primary),#4f46e5);
+  color:#fff;border:none;cursor:pointer;font-size:14px;
+  transition:opacity .15s;
+}
+.modal-send:hover{opacity:.85}
+.modal-send:disabled{opacity:.4;cursor:not-allowed}
+.modal-quick{
+  display:flex;gap:6px;padding:0 20px 10px;flex-wrap:wrap;flex-shrink:0;
+}
+.qbtn{
+  font-size:11px;padding:4px 10px;border-radius:6px;
+  background:var(--card);border:1px solid var(--border);
+  color:var(--muted);cursor:pointer;transition:all .15s;
+}
+.qbtn:hover{background:rgba(108,99,255,.15);color:#fff;border-color:var(--primary)}
+
+/* ── Sidebar Categorias Colapsáveis ───────────────────────── */
+.cat-header{
+  display:flex;align-items:center;gap:9px;
+  padding:9px 14px;cursor:pointer;
+  font-size:12px;font-weight:600;color:var(--text);
+  border-left:3px solid transparent;
+  transition:all .15s;user-select:none;
+}
+.cat-header:hover{background:rgba(108,99,255,.08)}
+.cat-header.open{color:#fff;background:rgba(108,99,255,.1);border-left-color:var(--primary)}
+.cat-header .cat-icon{width:22px;height:22px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0}
+.cat-header .cat-name{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cat-header .cat-count{font-size:9px;background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:1px 5px;color:var(--muted)}
+.cat-header .cat-arrow{font-size:9px;color:var(--muted);transition:transform .2s;flex-shrink:0}
+.cat-header.open .cat-arrow{transform:rotate(90deg)}
+.cat-agents{
+  overflow:hidden;
+  max-height:0;
+  transition:max-height .28s ease;
+}
+.cat-agents.open{max-height:600px}
+.cat-agent-item{
+  display:flex;align-items:center;gap:7px;
+  padding:7px 14px 7px 28px;
+  cursor:pointer;font-size:12px;color:var(--muted);
+  transition:all .12s;
+  border-left:2px solid transparent;
+  margin-left:3px;
+}
+.cat-agent-item:hover{background:rgba(255,255,255,.04);color:var(--text)}
+.cat-agent-item.active{background:rgba(108,99,255,.1);color:#fff;border-left-color:var(--primary)}
+.cat-agent-item .ag-emoji{font-size:14px;flex-shrink:0;width:18px;text-align:center}
+.cat-agent-item .ag-name{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cat-agent-item .ag-badge{font-size:9px;padding:1px 5px;border-radius:999px}
+
+/* ── Tab Agentes por Categoria ───────────────────────────── */
+#agents-panel-header{
+  display:flex;align-items:center;gap:10px;margin-bottom:16px;
+}
+.agents-cat-title{
+  font-size:16px;font-weight:700;color:#fff;
+}
+.agents-cat-back{
+  display:flex;align-items:center;gap:6px;
+  padding:5px 10px;border-radius:8px;
+  background:var(--card);border:1px solid var(--border);
+  color:var(--muted);font-size:12px;cursor:pointer;
+  transition:all .15s;
+}
+.agents-cat-back:hover{color:#fff;background:var(--border)}
 </style>
 </head>
 <body>
 
 <!-- HEADER -->
-<header class="glass sticky top-0 z-50 px-6 py-3 flex items-center justify-between">
-  <div class="flex items-center gap-3">
-    <div class="w-9 h-9 rounded-xl flex items-center justify-center text-lg" style="background:linear-gradient(135deg,#6C63FF,#22D3EE)">🤖</div>
+<header>
+  <div class="hdr-left">
+    <button class="btn-sidebar-toggle" onclick="toggleSidebar()" title="Menu">
+      <i class="fas fa-bars"></i>
+    </button>
+    <div class="hdr-logo">🤖</div>
     <div>
-      <div class="font-bold text-white">SixTech MAS <span class="text-xs px-1.5 py-0.5 rounded-full ml-1" style="background:#1e3a5f;color:#60A5FA">v3.0</span></div>
-      <div class="text-xs" style="color:var(--muted)">Multi-Agent System — Cloudflare Workers AI</div>
+      <div class="hdr-title">SixTech MAS <span class="hdr-badge">v3.0</span></div>
+      <div class="hdr-sub">Multi-Agent System · Cloudflare Workers AI</div>
     </div>
   </div>
-  <div class="flex items-center gap-3">
-    <div id="status-dot" class="flex items-center gap-2 text-xs" style="color:#34D399">
-      <span class="pulse-dot w-2 h-2 rounded-full bg-emerald-400 inline-block"></span>
+  <div class="hdr-right">
+    <div class="status-pill">
+      <span class="pulse"></span>
       <span id="status-text">Online</span>
     </div>
-    <a href="https://github.com/kainow252-cmyk/sixtechbrasil" target="_blank"
-       class="text-sm px-3 py-1.5 rounded-lg flex items-center gap-2"
-       style="background:var(--card);border:1px solid var(--border);color:var(--text)">
+    <a href="https://github.com/kainow252-cmyk/sixtechbrasil" target="_blank" class="btn-gh">
       <i class="fab fa-github"></i> GitHub
     </a>
   </div>
 </header>
 
-<!-- MAIN -->
-<div class="max-w-7xl mx-auto px-4 py-6">
+<!-- OVERLAY mobile -->
+<div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleSidebar()"></div>
 
-  <!-- TABS -->
-  <nav class="flex gap-1 mb-6 p-1 rounded-xl" style="background:var(--surface);border:1px solid var(--border);width:fit-content">
-    <button class="tab-btn active px-5 py-2.5 rounded-lg text-sm font-medium" onclick="showTab('pipeline')" style="background:var(--card)">
-      <i class="fas fa-project-diagram mr-2"></i>Pipeline
-    </button>
-    <button class="tab-btn px-5 py-2.5 rounded-lg text-sm font-medium text-gray-400" onclick="showTab('chat')">
-      <i class="fas fa-comments mr-2"></i>Chat IA
-    </button>
-    <button class="tab-btn px-5 py-2.5 rounded-lg text-sm font-medium text-gray-400" onclick="showTab('agents')">
-      <i class="fas fa-robot mr-2"></i>Agentes
-    </button>
-    <button class="tab-btn px-5 py-2.5 rounded-lg text-sm font-medium text-gray-400" onclick="showTab('status')">
-      <i class="fas fa-chart-line mr-2"></i>Status
-    </button>
-  </nav>
+<!-- BODY -->
+<div class="app-body">
 
-  <!-- ═══ TAB: PIPELINE ═══════════════════════════════════════════════════ -->
-  <div id="tab-pipeline" class="tab-panel active">
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+  <!-- SIDEBAR -->
+  <aside id="sidebar">
 
-      <!-- Coluna Esquerda: Configuração -->
-      <div class="space-y-4">
-        <!-- Tarefa -->
-        <div class="glass rounded-2xl p-5">
-          <h3 class="font-semibold text-white mb-3"><i class="fas fa-pen-to-square mr-2" style="color:var(--primary)"></i>Tarefa</h3>
-          <textarea id="pipeline-task" rows="5" placeholder="Descreva o que você precisa...&#10;&#10;Ex: Crie uma API REST em Python com FastAPI para gerenciar usuários com autenticação JWT"
-            class="w-full text-sm rounded-xl p-3 resize-none"
-            style="background:var(--bg);border:1px solid var(--border);color:var(--text)"></textarea>
-          <div class="flex gap-2 mt-3">
-            <button onclick="autoRoute()" class="flex-1 py-2.5 rounded-xl text-sm font-semibold"
-              style="background:linear-gradient(135deg,var(--primary),#4f46e5);color:white">
-              <i class="fas fa-wand-magic-sparkles mr-2"></i>Auto Roteamento
-            </button>
-            <button onclick="clearAll()" class="px-3 py-2.5 rounded-xl text-sm"
-              style="background:var(--card);border:1px solid var(--border);color:var(--muted)">
-              <i class="fas fa-trash"></i>
-            </button>
-          </div>
-        </div>
-
-        <!-- Seleção de Agentes -->
-        <div class="glass rounded-2xl p-5">
-          <div class="flex items-center justify-between mb-3">
-            <h3 class="font-semibold text-white"><i class="fas fa-robot mr-2" style="color:var(--secondary)"></i>Agentes</h3>
-            <span id="agent-count" class="text-xs" style="color:var(--muted)">0 selecionados</span>
-          </div>
-          <div id="agent-checklist" class="space-y-2 max-h-64 overflow-y-auto pr-1"></div>
-          <button onclick="runPipeline()" id="run-btn"
-            class="w-full mt-4 py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2"
-            style="background:linear-gradient(135deg,#059669,#10b981);color:white">
-            <i class="fas fa-play"></i>Executar Pipeline
-          </button>
-        </div>
-
-        <!-- Modo de Execução -->
-        <div class="glass rounded-2xl p-5">
-          <h3 class="font-semibold text-white mb-3"><i class="fas fa-sliders mr-2" style="color:var(--accent)"></i>Modo</h3>
-          <div class="space-y-2">
-            <label class="flex items-center gap-3 cursor-pointer">
-              <input type="radio" name="mode" value="pipeline" checked class="accent-purple-500">
-              <div>
-                <div class="text-sm font-medium text-white">Pipeline Sequencial</div>
-                <div class="text-xs" style="color:var(--muted)">Agentes passam contexto entre si</div>
-              </div>
-            </label>
-            <label class="flex items-center gap-3 cursor-pointer">
-              <input type="radio" name="mode" value="orchestrate" class="accent-purple-500">
-              <div>
-                <div class="text-sm font-medium text-white">Roteamento Inteligente</div>
-                <div class="text-xs" style="color:var(--muted)">Auto-seleção por análise de contexto</div>
-              </div>
-            </label>
-          </div>
-        </div>
+    <!-- Plataforma -->
+    <div class="sidebar-section">
+      <div class="sidebar-section-title">Plataforma</div>
+      <div class="nav-item active" onclick="showTab('pipeline',this)">
+        <i class="fas fa-project-diagram"></i> Pipeline
       </div>
-
-      <!-- Coluna Direita: Resultados -->
-      <div class="lg:col-span-2 space-y-4">
-        <!-- Progress Bar -->
-        <div id="progress-bar" class="glass rounded-2xl p-4 hidden">
-          <div class="flex items-center justify-between mb-3">
-            <span class="text-sm font-medium text-white">Executando Pipeline</span>
-            <span id="progress-info" class="text-xs" style="color:var(--muted)"></span>
-          </div>
-          <div id="progress-steps" class="flex gap-2 flex-wrap"></div>
-        </div>
-
-        <!-- Resultados -->
-        <div id="results-container" class="space-y-4">
-          <!-- placeholder -->
-          <div id="results-placeholder" class="glass rounded-2xl p-12 text-center">
-            <div class="text-5xl mb-4">🤖</div>
-            <div class="text-white font-medium mb-2">Pronto para executar</div>
-            <div class="text-sm" style="color:var(--muted)">Configure a tarefa, selecione os agentes e clique em Executar</div>
-          </div>
-        </div>
+      <div class="nav-item" onclick="showTab('chat',this)">
+        <i class="fas fa-comments"></i> Chat IA
       </div>
     </div>
-  </div>
 
-  <!-- ═══ TAB: CHAT ════════════════════════════════════════════════════════ -->
-  <div id="tab-chat" class="tab-panel">
-    <div class="grid grid-cols-1 lg:grid-cols-4 gap-5">
+    <!-- Categorias de Agentes -->
+    <div class="sidebar-section">
+      <div class="sidebar-section-title">Categorias de Agentes</div>
+      <div id="sidebar-categories"></div>
+    </div>
 
-      <!-- Sidebar Chat -->
-      <div class="space-y-4">
-        <div class="glass rounded-2xl p-4">
-          <h3 class="font-semibold text-white mb-3"><i class="fas fa-microchip mr-2" style="color:var(--primary)"></i>Modelo</h3>
-          <select id="chat-model" class="w-full text-sm rounded-xl p-2.5"
-            style="background:var(--bg);border:1px solid var(--border);color:var(--text)">
-          </select>
-          <div class="mt-3">
-            <div class="text-xs font-medium mb-2" style="color:var(--muted)">Agente Especialista</div>
-            <select id="chat-agent" class="w-full text-sm rounded-xl p-2.5"
-              style="background:var(--bg);border:1px solid var(--border);color:var(--text)">
-              <option value="">Nenhum (chat livre)</option>
-            </select>
-          </div>
-        </div>
-        <div class="glass rounded-2xl p-4">
-          <div class="flex items-center justify-between mb-3">
-            <h3 class="font-semibold text-white text-sm"><i class="fas fa-clock-rotate-left mr-2" style="color:var(--secondary)"></i>Histórico</h3>
-            <button onclick="clearChat()" class="text-xs px-2 py-1 rounded-lg"
-              style="background:var(--card);color:var(--muted)">Limpar</button>
-          </div>
-          <div id="chat-history-list" class="space-y-1 text-xs" style="color:var(--muted)">
-            <div class="text-center py-4">Nenhuma conversa</div>
-          </div>
-        </div>
+    <!-- Sistema -->
+    <div class="sidebar-section">
+      <div class="sidebar-section-title">Sistema</div>
+      <div class="nav-item" onclick="showTab('status',this)">
+        <i class="fas fa-chart-line"></i> Status
       </div>
+    </div>
 
-      <!-- Chat Principal -->
-      <div class="lg:col-span-3 glass rounded-2xl flex flex-col" style="height:600px">
-        <div class="p-4 border-b flex items-center justify-between" style="border-color:var(--border)">
-          <div class="flex items-center gap-2">
-            <span class="text-lg">💬</span>
-            <span class="font-medium text-white">Chat com IA</span>
+    <!-- Dashboard -->
+    <div class="sidebar-stat">
+      <div class="sidebar-stat-title">Dashboard</div>
+      <div class="sstat"><span>Agentes</span><span class="sstat-val" id="sb-agents">—</span></div>
+      <div class="sstat"><span>Categorias</span><span class="sstat-val" id="sb-cats">24</span></div>
+      <div class="sstat"><span>Uptime</span><span class="sstat-val" style="color:#34D399">99.9%</span></div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main>
+
+    <!-- ══ TAB: PIPELINE ══════════════════════════════════════ -->
+    <div id="tab-pipeline" class="tab-panel active">
+      <div class="grid-2">
+
+        <!-- Coluna Esquerda -->
+        <div class="col-left">
+          <div class="card">
+            <div class="card-title"><i class="fas fa-pen-to-square" style="color:var(--primary)"></i> Tarefa</div>
+            <textarea id="pipeline-task" rows="5" placeholder="Descreva o que você precisa...
+
+Ex: Crie uma API REST em Python com FastAPI para gerenciar usuários com autenticação JWT"></textarea>
+            <div style="display:flex;gap:8px;margin-top:10px">
+              <button class="btn btn-primary" style="flex:1" onclick="autoRoute()">
+                <i class="fas fa-wand-magic-sparkles"></i> Auto Roteamento
+              </button>
+              <button class="btn btn-ghost btn-icon" onclick="clearAll()"><i class="fas fa-trash"></i></button>
+            </div>
           </div>
-          <span id="chat-model-badge" class="badge badge-cf">Llama 3.1 8B</span>
-        </div>
-        <div id="chat-messages" class="flex-1 overflow-y-auto p-4 space-y-4">
-          <div class="msg-ai rounded-xl p-4 text-sm">
-            <div class="font-medium text-cyan-400 mb-1">🤖 Assistente SixTech</div>
-            <div>Olá! Sou o assistente da <strong>SixTech Brasil</strong>, powered by Cloudflare Workers AI. Como posso ajudar você hoje?</div>
+
+          <div class="card">
+            <div class="card-title" style="justify-content:space-between">
+              <span><i class="fas fa-robot" style="color:var(--secondary)"></i> Agentes</span>
+              <span id="agent-count" style="font-size:11px;color:var(--muted);font-weight:400">0 selecionados</span>
+            </div>
+            <div id="agent-checklist" class="checklist-scroll"></div>
+            <button class="btn btn-success btn-full" onclick="runPipeline()" id="run-btn">
+              <i class="fas fa-play"></i> Executar Pipeline
+            </button>
+          </div>
+
+          <div class="card">
+            <div class="card-title"><i class="fas fa-sliders" style="color:var(--accent)"></i> Modo</div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <label class="mode-label">
+                <input type="radio" name="mode" value="pipeline" checked>
+                <div><div class="mode-title">Pipeline Sequencial</div><div class="mode-sub">Agentes passam contexto entre si</div></div>
+              </label>
+              <label class="mode-label">
+                <input type="radio" name="mode" value="orchestrate">
+                <div><div class="mode-title">Roteamento Inteligente</div><div class="mode-sub">Auto-seleção por análise de contexto</div></div>
+              </label>
+            </div>
           </div>
         </div>
-        <div id="typing-indicator" class="px-4 py-2 text-xs hidden" style="color:var(--muted)">
-          <span class="pulse-dot w-1.5 h-1.5 rounded-full bg-cyan-400 inline-block mr-2"></span>IA digitando...
+
+        <!-- Coluna Direita -->
+        <div>
+          <div id="progress-bar" class="card" style="margin-bottom:12px">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <span style="font-size:13px;font-weight:600;color:#fff"><i class="fas fa-spin fa-circle-notch spin" style="color:var(--primary);margin-right:6px"></i>Executando...</span>
+              <span id="progress-info" style="font-size:11px;color:var(--muted)"></span>
+            </div>
+            <div id="progress-steps" class="progress-steps"></div>
+          </div>
+
+          <div id="results-container">
+            <div id="results-placeholder">
+              <div class="ph-emoji">🤖</div>
+              <div class="ph-title">Pronto para executar</div>
+              <div class="ph-sub">Configure a tarefa, selecione agentes e clique em Executar</div>
+            </div>
+          </div>
         </div>
-        <div class="p-4 border-t" style="border-color:var(--border)">
-          <div class="flex gap-2">
-            <textarea id="chat-input" rows="2" placeholder="Digite sua mensagem... (Enter para enviar)"
-              class="flex-1 text-sm rounded-xl p-3 resize-none"
-              style="background:var(--bg);border:1px solid var(--border);color:var(--text)"
+
+      </div>
+    </div>
+
+    <!-- ══ TAB: CHAT ══════════════════════════════════════════ -->
+    <div id="tab-chat" class="tab-panel">
+      <div class="grid-chat">
+
+        <!-- Sidebar Chat -->
+        <div class="col-left">
+          <div class="card">
+            <div class="card-title"><i class="fas fa-microchip" style="color:var(--primary)"></i> Modelo</div>
+            <select id="chat-model"></select>
+            <div style="margin-top:10px">
+              <div style="font-size:11px;color:var(--muted);margin-bottom:5px">Agente Especialista</div>
+              <select id="chat-agent"><option value="">Nenhum (chat livre)</option></select>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title" style="justify-content:space-between">
+              <span><i class="fas fa-clock-rotate-left" style="color:var(--secondary)"></i> Histórico</span>
+              <button class="btn btn-ghost" style="padding:3px 8px;font-size:11px" onclick="clearChat()">Limpar</button>
+            </div>
+            <div id="chat-history-list" style="font-size:11px;color:var(--muted);text-align:center;padding:12px 0">Nenhuma conversa</div>
+          </div>
+        </div>
+
+        <!-- Chat Box -->
+        <div class="chat-box">
+          <div class="chat-hdr">
+            <div style="display:flex;align-items:center;gap:8px">
+              <span style="font-size:16px">💬</span>
+              <span style="font-weight:600;font-size:14px;color:#fff">Chat com IA</span>
+            </div>
+            <span id="chat-model-badge" class="badge badge-cf">Llama 3.1 8B</span>
+          </div>
+          <div id="chat-messages" class="chat-msgs">
+            <div class="msg msg-ai">
+              <div class="msg-name ai">🤖 Assistente SixTech</div>
+              <div>Olá! Sou o assistente da <strong>SixTech Brasil</strong>, powered by Cloudflare Workers AI. Como posso ajudar você hoje?</div>
+            </div>
+          </div>
+          <div id="typing-indicator"><span class="typing-dot"></span>IA digitando...</div>
+          <div class="chat-input-row">
+            <textarea id="chat-input" placeholder="Digite sua mensagem... (Enter para enviar)"
               onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat()}"></textarea>
-            <button onclick="sendChat()" id="chat-send-btn"
-              class="px-4 rounded-xl font-semibold self-end py-3"
-              style="background:linear-gradient(135deg,var(--primary),#4f46e5);color:white">
+            <button class="btn btn-primary btn-icon" onclick="sendChat()" id="chat-send-btn" style="height:60px;padding:0 16px">
               <i class="fas fa-paper-plane"></i>
             </button>
           </div>
         </div>
+
       </div>
     </div>
-  </div>
 
-  <!-- ═══ TAB: AGENTES ═════════════════════════════════════════════════════ -->
-  <div id="tab-agents" class="tab-panel">
-    <div class="mb-4 flex items-center gap-3">
-      <input id="agent-search" type="text" placeholder="Buscar agente..."
-        class="text-sm rounded-xl px-4 py-2.5 w-64"
-        style="background:var(--surface);border:1px solid var(--border);color:var(--text)"
-        oninput="filterAgents(this.value)">
-      <div class="flex gap-2">
-        <button onclick="filterBySource('all')" class="filter-btn active px-3 py-2 rounded-lg text-xs font-medium" style="background:var(--primary);color:white">Todos</button>
-        <button onclick="filterBySource('hybrid')" class="filter-btn px-3 py-2 rounded-lg text-xs font-medium" style="background:var(--card);color:var(--muted)">Hybrid</button>
-        <button onclick="filterBySource('cloudflare')" class="filter-btn px-3 py-2 rounded-lg text-xs font-medium" style="background:var(--card);color:var(--muted)">Cloudflare</button>
+    <!-- ══ TAB: AGENTES ════════════════════════════════════════ -->
+    <div id="tab-agents" class="tab-panel">
+      <div id="agents-panel-header">
+        <button class="agents-cat-back" onclick="showAllAgents()">
+          <i class="fas fa-arrow-left"></i> Todas
+        </button>
+        <div>
+          <div class="agents-cat-title" id="agents-cat-title">Todos os Agentes</div>
+          <div style="font-size:11px;color:var(--muted)" id="agents-cat-sub">Selecione uma categoria na sidebar</div>
+        </div>
+        <div style="margin-left:auto">
+          <input type="text" id="agent-search" placeholder="Buscar..." style="width:160px;padding:6px 10px;font-size:12px" oninput="filterAgents(this.value)">
+        </div>
       </div>
+      <div id="agents-grid" class="agents-grid"></div>
     </div>
-    <div id="agents-grid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"></div>
-  </div>
 
-  <!-- ═══ TAB: STATUS ══════════════════════════════════════════════════════ -->
-  <div id="tab-status" class="tab-panel">
-    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
-      <div class="glass rounded-2xl p-5">
-        <div class="text-3xl font-bold gradient-text" id="stat-agents">9</div>
-        <div class="text-sm mt-1" style="color:var(--muted)">Agentes Ativos</div>
+    <!-- ══ TAB: STATUS ═════════════════════════════════════════ -->
+    <div id="tab-status" class="tab-panel">
+      <div class="stats-grid">
+        <div class="stat-card"><div class="stat-val gtext" id="stat-agents">9</div><div class="stat-label">Agentes Ativos</div></div>
+        <div class="stat-card"><div class="stat-val" style="color:#22D3EE" id="stat-models">8</div><div class="stat-label">Modelos de IA</div></div>
+        <div class="stat-card"><div class="stat-val" style="color:#34D399" id="stat-repos">4</div><div class="stat-label">Repos Integrados</div></div>
+        <div class="stat-card"><div class="stat-val" style="color:#F59E0B">v3.0</div><div class="stat-label">Versão</div></div>
       </div>
-      <div class="glass rounded-2xl p-5">
-        <div class="text-3xl font-bold" style="color:#22D3EE" id="stat-models">8</div>
-        <div class="text-sm mt-1" style="color:var(--muted)">Modelos de IA</div>
-      </div>
-      <div class="glass rounded-2xl p-5">
-        <div class="text-3xl font-bold" style="color:#34D399" id="stat-repos">4</div>
-        <div class="text-sm mt-1" style="color:var(--muted)">Repos Integrados</div>
-      </div>
-      <div class="glass rounded-2xl p-5">
-        <div class="text-3xl font-bold" style="color:#F59E0B" id="stat-ver">v3.0</div>
-        <div class="text-sm mt-1" style="color:var(--muted)">Versão</div>
-      </div>
+      <div id="status-details" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px"></div>
     </div>
-    <div id="status-details" class="grid grid-cols-1 lg:grid-cols-2 gap-4"></div>
-  </div>
 
+  </main>
 </div>
 
+<!-- MODAL AGENTE -->
+<div class="modal-backdrop" id="agent-modal" onclick="_modalBgClick(event)">
+  <div class="modal-box">
+    <div class="modal-hdr">
+      <div class="modal-agent-icon" id="modal-icon"></div>
+      <div>
+        <div class="modal-agent-name" id="modal-name"></div>
+        <div class="modal-agent-sub" id="modal-sub"></div>
+      </div>
+      <button class="modal-close" onclick="closeAgentModal()">&#x2715;</button>
+    </div>
+    <div class="modal-caps" id="modal-caps"></div>
+    <div class="modal-msgs" id="modal-msgs"></div>
+    <div class="modal-typing" id="modal-typing">
+      <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--secondary);animation:pulse 1s infinite;margin-right:5px"></span>
+      digitando...
+    </div>
+    <div class="modal-quick" id="modal-quick"></div>
+    <div class="modal-input-row">
+      <textarea id="modal-input" placeholder="Digite sua mensagem... (Enter para enviar)"
+        onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();modalSend()}"></textarea>
+      <button class="modal-send" id="modal-send-btn" onclick="modalSend()">
+        <i class="fas fa-paper-plane"></i>
+      </button>
+    </div>
+  </div>
+</div>
+
+<script src="/static/app.js"><\/script>
 <script>
-// ── Estado global
-let agents = [], models = {}, chatHistory = [], allAgents = []
-
-// ── Inicialização
-async function init() {
-  try {
-    const [agentsRes, modelsRes] = await Promise.all([
-      fetch('/api/agents'), fetch('/api/models')
-    ])
-    const agentsData = await agentsRes.json()
-    const modelsData = await modelsRes.json()
-    agents = agentsData.agents
-    allAgents = [...agents]
-    models = modelsData.models
-
-    renderAgentChecklist()
-    renderAgentsGrid()
-    renderChatModels()
-    loadStatus()
-  } catch(e) {
-    console.error('Init error:', e)
-  }
+const _v = '3.0'
+function toggleSidebar(){
+  const s = document.getElementById('sidebar')
+  const o = document.getElementById('sidebar-overlay')
+  s.classList.toggle('collapsed')
+  o.style.display = s.classList.contains('collapsed') ? 'none' : ''
 }
-
-// ── Tabs
-function showTab(name) {
-  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'))
-  document.querySelectorAll('.tab-btn').forEach(b => {
-    b.classList.remove('active')
-    b.style.background = 'transparent'
-    b.style.color = '#6B7280'
-  })
-  document.getElementById('tab-' + name).classList.add('active')
-  const btn = event.currentTarget
-  btn.classList.add('active')
-  btn.style.background = 'var(--card)'
-  btn.style.color = 'white'
-}
-
-// ── Agent Checklist
-function renderAgentChecklist() {
-  const container = document.getElementById('agent-checklist')
-  container.innerHTML = agents.map(a => \`
-    <label class="flex items-center gap-3 p-2 rounded-xl cursor-pointer hover:bg-white/5 transition-colors agent-check-item" data-source="\${a.source}">
-      <input type="checkbox" value="\${a.id}" class="accent-purple-500 agent-checkbox"
-        onchange="updateAgentCount()">
-      <span class="text-lg">\${a.emoji}</span>
-      <div class="flex-1 min-w-0">
-        <div class="text-sm font-medium text-white truncate">\${a.name}</div>
-        <div class="text-xs truncate" style="color:#6B7280">\${a.category}</div>
-      </div>
-      <span class="badge \${a.source === 'hybrid' ? 'badge-hybrid' : 'badge-cf'} shrink-0">
-        \${a.source === 'hybrid' ? 'hybrid' : 'cf'}
-      </span>
-    </label>
-  \`).join('')
-  updateAgentCount()
-}
-
-function updateAgentCount() {
-  const count = document.querySelectorAll('.agent-checkbox:checked').length
-  document.getElementById('agent-count').textContent = count + ' selecionados'
-}
-
-// ── Auto Routing
-async function autoRoute() {
-  const task = document.getElementById('pipeline-task').value.trim()
-  if (!task) return
-
-  document.querySelectorAll('.agent-checkbox').forEach(cb => cb.checked = false)
-  const res = await fetch('/api/orchestrate', {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({task})
-  })
-  if (!res.ok) return
-  const data = await res.json()
-  data.agentsUsed.forEach(id => {
-    const cb = document.querySelector(\`.agent-checkbox[value="\${id}"]\`)
-    if (cb) cb.checked = true
-  })
-  updateAgentCount()
-  document.querySelector('input[name="mode"][value="orchestrate"]').checked = true
-}
-
-// ── Run Pipeline
-async function runPipeline() {
-  const task = document.getElementById('pipeline-task').value.trim()
-  if (!task) return alert('Digite uma tarefa!')
-
-  const selectedIds = [...document.querySelectorAll('.agent-checkbox:checked')].map(cb => cb.value)
-  if (!selectedIds.length) return alert('Selecione ao menos um agente!')
-
-  const mode = document.querySelector('input[name="mode"]:checked').value
-  const btn = document.getElementById('run-btn')
-  btn.disabled = true
-  btn.innerHTML = '<i class="fas fa-spinner spin mr-2"></i>Executando...'
-
-  // Progress bar
-  const pb = document.getElementById('progress-bar')
-  pb.classList.remove('hidden')
-  const steps = document.getElementById('progress-steps')
-  steps.innerHTML = selectedIds.map((id, i) => {
-    const a = agents.find(x => x.id === id)
-    return \`<div class="progress-step pending flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs" id="step-\${id}"
-      style="background:var(--card);border:1px solid var(--border)">
-      <span>\${a?.emoji || '🤖'}</span><span>\${a?.name || id}</span>
-    </div>\`
-  }).join('')
-
-  // Clear results
-  const container = document.getElementById('results-container')
-  document.getElementById('results-placeholder')?.remove()
-  container.innerHTML = ''
-
-  try {
-    if (mode === 'orchestrate') {
-      document.getElementById('progress-info').textContent = 'Roteamento inteligente...'
-      selectedIds.forEach(id => document.getElementById('step-' + id)?.classList.add('done'))
-
-      const res = await fetch('/api/orchestrate', {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({task})
-      })
-      const data = await res.json()
-      data.results.forEach(r => renderResult(r, container))
-    } else {
-      for (let i = 0; i < selectedIds.length; i++) {
-        const id = selectedIds[i]
-        const stepEl = document.getElementById('step-' + id)
-        if (stepEl) {
-          stepEl.style.background = 'rgba(108,99,255,.2)'
-          stepEl.style.borderColor = '#6C63FF'
-          stepEl.innerHTML = stepEl.innerHTML.replace('</div>', '') + ' <i class="fas fa-spinner spin"></i></div>'
-        }
-        document.getElementById('progress-info').textContent = \`\${i+1}/\${selectedIds.length}\`
-
-        const res = await fetch('/api/agent/' + id, {
-          method: 'POST',
-          headers: {'Content-Type':'application/json'},
-          body: JSON.stringify({task, message: task})
-        })
-        const result = await res.json()
-        renderResult(result, container)
-
-        if (stepEl) {
-          stepEl.style.background = 'rgba(52,211,153,.1)'
-          stepEl.style.borderColor = '#34D399'
-          stepEl.classList.remove('pending')
-          stepEl.classList.add('done')
-          stepEl.innerHTML = stepEl.innerHTML.replace(/<i class.*</i>/, '✓')
-        }
-      }
-    }
-  } catch(e) {
-    container.innerHTML += \`<div class="glass rounded-2xl p-5 border border-red-800/50">
-      <div class="text-red-400">❌ Erro: \${e.message}</div></div>\`
-  }
-
-  btn.disabled = false
-  btn.innerHTML = '<i class="fas fa-play mr-2"></i>Executar Pipeline'
-}
-
-function renderResult(r, container) {
-  const sourceLabel = r.usedFallback ? '☁️ CF Fallback' : r.source === 'internal' ? '🖥️ Interno' : '☁️ Cloudflare'
-  const sourceBadge = r.usedFallback ? 'badge-hybrid' : r.source === 'internal' ? 'badge-int' : 'badge-cf'
-  const formatted = mdToHtml(r.response || r.error || 'Sem resposta')
-
-  const el = document.createElement('div')
-  el.className = 'result-card glass rounded-2xl overflow-hidden'
-  el.innerHTML = \`
-    <div class="flex items-center gap-3 p-4" style="border-bottom:1px solid var(--border);background:linear-gradient(90deg,\${r.color}15,transparent)">
-      <span class="text-2xl">\${r.emoji}</span>
-      <div class="flex-1">
-        <div class="font-semibold text-white">\${r.name}</div>
-        <div class="text-xs" style="color:#6B7280">\${r.model?.split('/').pop()}</div>
-      </div>
-      <span class="badge \${sourceBadge}">\${sourceLabel}</span>
-      <span class="text-xs" style="color:#6B7280">\${(r.duration/1000).toFixed(1)}s</span>
-    </div>
-    <div class="p-5 text-sm leading-relaxed prose-sm" style="color:#D1D5DB">\${formatted}</div>
-  \`
-  container.appendChild(el)
-  el.scrollIntoView({behavior:'smooth', block:'nearest'})
-}
-
-// ── Chat
-function renderChatModels() {
-  const sel = document.getElementById('chat-model')
-  sel.innerHTML = models.map(m => \`<option class="model-opt" value="\${m.id}">\${m.label}</option>\`).join('')
-  sel.addEventListener('change', () => {
-    document.getElementById('chat-model-badge').textContent = models.find(m => m.id === sel.value)?.label || sel.value
-  })
-
-  const agentSel = document.getElementById('chat-agent')
-  agentSel.innerHTML = '<option value="">Nenhum (chat livre)</option>' +
-    agents.map(a => \`<option value="\${a.id}">\${a.emoji} \${a.name}</option>\`).join('')
-}
-
-async function sendChat() {
-  const input = document.getElementById('chat-input')
-  const msg = input.value.trim()
-  if (!msg) return
-
-  const agentId = document.getElementById('chat-agent').value
-  input.value = ''
-  input.style.height = 'auto'
-
-  // Se agente selecionado, usa /api/agent/:id
-  if (agentId) {
-    appendChatMsg('user', msg)
-    document.getElementById('typing-indicator').classList.remove('hidden')
-    try {
-      const res = await fetch('/api/agent/' + agentId, {
-        method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({message: msg})
-      })
-      const data = await res.json()
-      document.getElementById('typing-indicator').classList.add('hidden')
-      const agent = agents.find(a => a.id === agentId)
-      appendChatMsg('assistant', data.response || 'Sem resposta', agent?.name, agent?.emoji)
-    } catch(e) {
-      document.getElementById('typing-indicator').classList.add('hidden')
-      appendChatMsg('assistant', '❌ Erro: ' + e.message)
-    }
-    return
-  }
-
-  // Chat livre com streaming SSE
-  const model = document.getElementById('chat-model').value
-  chatHistory.push({role: 'user', content: msg})
-  appendChatMsg('user', msg)
-  document.getElementById('typing-indicator').classList.remove('hidden')
-  document.getElementById('chat-send-btn').disabled = true
-
-  // Container para resposta streaming
-  const aiEl = document.createElement('div')
-  aiEl.className = 'msg-ai rounded-xl p-4 text-sm'
-  aiEl.innerHTML = '<div class="font-medium mb-1" style="color:#22D3EE">🤖 Assistente</div><div class="streaming-text"></div>'
-  document.getElementById('chat-messages').appendChild(aiEl)
-  const textEl = aiEl.querySelector('.streaming-text')
-  document.getElementById('chat-messages').scrollTop = 9999
-
-  let fullText = ''
-  try {
-    const res = await fetch('/api/chat', {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({messages: [...chatHistory], model})
-    })
-    if (!res.body) throw new Error('Stream não disponível')
-    const reader = res.body.getReader()
-    const decoder = new TextDecoder()
-    let buffer = ''
-
-    while (true) {
-      const {done, value} = await reader.read()
-      if (done) break
-      buffer += decoder.decode(value, {stream: true})
-      const parts = buffer.split('\\n\\n')
-      buffer = parts.pop() || ''
-      for (const part of parts) {
-        for (const line of part.split('\\n')) {
-          if (!line.startsWith('data:')) continue
-          const data = line.slice(5).trim()
-          if (data === '[DONE]') continue
-          try {
-            const json = JSON.parse(data)
-            const chunk = json.response || json.choices?.[0]?.delta?.content || ''
-            if (chunk) {
-              fullText += chunk
-              textEl.innerHTML = mdToHtml(fullText) + '<span class="typing-cursor"></span>'
-              document.getElementById('chat-messages').scrollTop = 9999
-            }
-          } catch {}
-        }
-      }
-    }
-    textEl.innerHTML = mdToHtml(fullText)
-    chatHistory.push({role: 'assistant', content: fullText})
-    updateChatHistory()
-  } catch(e) {
-    textEl.textContent = '❌ Erro: ' + e.message
-  }
-
-  document.getElementById('typing-indicator').classList.add('hidden')
-  document.getElementById('chat-send-btn').disabled = false
-}
-
-function appendChatMsg(role, text, name='Assistente', emoji='🤖') {
-  const el = document.createElement('div')
-  el.className = role === 'user' ? 'msg-user rounded-xl p-4 text-sm ml-8' : 'msg-ai rounded-xl p-4 text-sm'
-  if (role === 'user') {
-    el.innerHTML = \`<div class="font-medium mb-1" style="color:#a5b4fc">👤 Você</div><div>\${escHtml(text)}</div>\`
-  } else {
-    el.innerHTML = \`<div class="font-medium mb-1" style="color:#22D3EE">\${emoji} \${name}</div><div>\${mdToHtml(text)}</div>\`
-  }
-  document.getElementById('chat-messages').appendChild(el)
-  document.getElementById('chat-messages').scrollTop = 9999
-}
-
-function updateChatHistory() {
-  const list = document.getElementById('chat-history-list')
-  const userMsgs = chatHistory.filter(m => m.role === 'user')
-  if (!userMsgs.length) return
-  list.innerHTML = userMsgs.slice(-5).reverse().map(m =>
-    \`<div class="px-2 py-1.5 rounded-lg hover:bg-white/5 cursor-pointer truncate">\${m.content.slice(0,35)}...</div>\`
-  ).join('')
-}
-
-function clearChat() {
-  chatHistory = []
-  document.getElementById('chat-messages').innerHTML = \`
-    <div class="msg-ai rounded-xl p-4 text-sm">
-      <div class="font-medium text-cyan-400 mb-1">🤖 Assistente SixTech</div>
-      <div>Olá! Como posso ajudar?</div>
-    </div>\`
-  document.getElementById('chat-history-list').innerHTML = '<div class="text-center py-4">Nenhuma conversa</div>'
-}
-
-// ── Agents Grid
-function renderAgentsGrid(filtered = null) {
-  const list = filtered || allAgents
-  document.getElementById('agents-grid').innerHTML = list.map(a => \`
-    <div class="agent-card glass rounded-2xl overflow-hidden">
-      <div class="p-5" style="border-bottom:1px solid var(--border);background:linear-gradient(135deg,\${a.color}20,transparent)">
-        <div class="flex items-start justify-between mb-3">
-          <div class="flex items-center gap-3">
-            <span class="text-3xl">\${a.emoji}</span>
-            <div>
-              <div class="font-bold text-white">\${a.name}</div>
-              <div class="text-xs" style="color:#6B7280">\${a.category}</div>
-            </div>
-          </div>
-          <span class="badge \${a.source === 'hybrid' ? 'badge-hybrid' : 'badge-cf'}">\${a.source}</span>
-        </div>
-        <p class="text-xs leading-relaxed" style="color:#9CA3AF">\${a.desc}</p>
-      </div>
-      <div class="p-4">
-        <div class="mb-3">
-          <div class="text-xs font-medium mb-2" style="color:#6B7280">CAPACIDADES</div>
-          <div class="flex flex-wrap gap-1">
-            \${(a.capabilities||[]).map(c => \`<span class="cap-pill">\${c}</span>\`).join('')}
-          </div>
-        </div>
-        \${a.basedOn ? \`<div class="text-xs mb-3" style="color:#6B7280">📦 Baseado em: <span style="color:#a5b4fc">\${a.basedOn}</span></div>\` : ''}
-        <div class="text-xs mb-3" style="color:#6B7280">🤖 Modelo: <span style="color:#22D3EE">\${a.model?.split('/').pop()}</span></div>
-        <button onclick="testAgent('\${a.id}')"
-          class="w-full py-2 rounded-xl text-xs font-semibold"
-          style="background:rgba(108,99,255,.2);border:1px solid rgba(108,99,255,.4);color:#a5b4fc">
-          <i class="fas fa-flask mr-1"></i>Testar Agente
-        </button>
-      </div>
-    </div>
-  \`).join('')
-}
-
-function filterAgents(q) {
-  const filtered = allAgents.filter(a =>
-    a.name.toLowerCase().includes(q.toLowerCase()) ||
-    a.desc.toLowerCase().includes(q.toLowerCase()) ||
-    a.category.toLowerCase().includes(q.toLowerCase())
-  )
-  renderAgentsGrid(filtered)
-}
-
-function filterBySource(src) {
-  document.querySelectorAll('.filter-btn').forEach(b => {
-    b.style.background = 'var(--card)'; b.style.color = 'var(--muted)'
-  })
-  event.currentTarget.style.background = 'var(--primary)'
-  event.currentTarget.style.color = 'white'
-  renderAgentsGrid(src === 'all' ? allAgents : allAgents.filter(a => a.source === src))
-}
-
-async function testAgent(id) {
-  const task = prompt('Teste o agente — digite uma tarefa:')
-  if (!task) return
-  showTab('pipeline')
-  setTimeout(() => {
-    document.getElementById('pipeline-task').value = task
-    document.querySelectorAll('.agent-checkbox').forEach(cb => cb.checked = cb.value === id)
-    updateAgentCount()
-    runPipeline()
-  }, 100)
-}
-
-// ── Status
-async function loadStatus() {
-  try {
-    const res = await fetch('/api/status')
-    const data = await res.json()
-    const container = document.getElementById('status-details')
-    container.innerHTML = \`
-      <div class="glass rounded-2xl p-5">
-        <h3 class="font-semibold text-white mb-4"><i class="fas fa-code-branch mr-2" style="color:var(--primary)"></i>Repositórios Integrados</h3>
-        <div class="space-y-3">
-          \${Object.entries(data.repos).map(([name, info]) => \`
-            <div class="flex items-start gap-3 p-3 rounded-xl" style="background:var(--bg);border:1px solid var(--border)">
-              <span class="text-green-400 mt-0.5">●</span>
-              <div>
-                <div class="font-medium text-white text-sm">\${name}</div>
-                <div class="text-xs mt-1" style="color:#6B7280">\${info.type}</div>
-                \${info.url ? \`<a href="\${info.url}" target="_blank" class="text-xs" style="color:#6C63FF">\${info.url}</a>\` : ''}
-                \${info.note ? \`<div class="text-xs mt-1" style="color:#F59E0B">\${info.note}</div>\` : ''}
-              </div>
-            </div>
-          \`).join('')}
-        </div>
-      </div>
-      <div class="glass rounded-2xl p-5">
-        <h3 class="font-semibold text-white mb-4"><i class="fas fa-server mr-2" style="color:var(--secondary)"></i>Funcionalidades</h3>
-        <div class="space-y-2">
-          \${data.features.map(f => \`
-            <div class="flex items-center gap-3 p-2.5 rounded-xl" style="background:var(--bg)">
-              <i class="fas fa-check-circle text-emerald-400"></i>
-              <span class="text-sm text-white">\${f}</span>
-            </div>
-          \`).join('')}
-        </div>
-        <div class="mt-4 p-3 rounded-xl text-xs" style="background:rgba(108,99,255,.1);border:1px solid rgba(108,99,255,.3);color:#a5b4fc">
-          <i class="fas fa-info-circle mr-2"></i>
-          Plataforma hospedada no Cloudflare Pages Edge — latência global < 50ms
-        </div>
-      </div>
-    \`
-    document.getElementById('stat-agents').textContent = data.agents
-    document.getElementById('stat-models').textContent = data.models
-  } catch(e) {
-    document.getElementById('status-text').textContent = 'Verificando...'
-  }
-}
-
-// ── Utils
-function clearAll() {
-  document.getElementById('pipeline-task').value = ''
-  document.querySelectorAll('.agent-checkbox').forEach(cb => cb.checked = false)
-  updateAgentCount()
-  document.getElementById('results-container').innerHTML = \`
-    <div id="results-placeholder" class="glass rounded-2xl p-12 text-center">
-      <div class="text-5xl mb-4">🤖</div>
-      <div class="text-white font-medium mb-2">Pronto para executar</div>
-      <div class="text-sm" style="color:var(--muted)">Configure a tarefa, selecione os agentes e clique em Executar</div>
-    </div>\`
-  document.getElementById('progress-bar').classList.add('hidden')
-}
-
-function escHtml(t) {
-  return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-}
-
-function mdToHtml(md) {
-  if (!md) return ''
-  return md
-    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-    .replace(/\`\`\`(\\w*)?\\n?([\\s\\S]*?)\`\`\`/g, (_,lang,code) =>
-      \`<pre style="background:#0d0d1a;border:1px solid #2A2D40;border-radius:8px;padding:12px;overflow-x:auto;margin:8px 0"><code class="language-\${lang||'text'}" style="color:#e2e8f0;font-family:monospace">\${code.trim()}</code></pre>\`)
-    .replace(/\`([^\`]+)\`/g, '<code style="background:#1e2030;padding:2px 6px;border-radius:4px;color:#f472b6;font-family:monospace">$1</code>')
-    .replace(/\\*\\*([^*]+)\\*\\*/g, '<strong style="color:white">$1</strong>')
-    .replace(/\\*([^*]+)\\*/g, '<em>$1</em>')
-    .replace(/^### (.+)$/gm, '<h3 style="color:#22D3EE;font-size:1rem;font-weight:600;margin:12px 0 6px">$1</h3>')
-    .replace(/^## (.+)$/gm, '<h2 style="color:#a5b4fc;font-size:1.1rem;font-weight:700;margin:16px 0 8px">$1</h2>')
-    .replace(/^# (.+)$/gm, '<h1 style="color:white;font-size:1.25rem;font-weight:800;margin:16px 0 8px">$1</h1>')
-    .replace(/^[-*] (.+)$/gm, '<li style="margin:3px 0;padding-left:4px">• $1</li>')
-    .replace(/^(\\d+)\\. (.+)$/gm, '<li style="margin:3px 0;padding-left:4px">$1. $2</li>')
-    .replace(/^> (.+)$/gm, '<blockquote style="border-left:3px solid #6C63FF;padding-left:12px;color:#9CA3AF;margin:8px 0">$1</blockquote>')
-    .replace(/\\n/g, '<br>')
-}
-
-// Inicializar
-init()
 <\/script>
 </body>
-</html>`));const et=new Et,ps=Object.assign({"/src/index.tsx":$});let At=!1;for(const[,t]of Object.entries(ps))t&&(et.route("/",t),et.notFound(t.notFoundHandler),At=!0);if(!At)throw new Error("Can't import modules from ['/src/index.tsx','/app/server.ts']");export{et as default};
+</html>`));const et=new kt,ua=Object.assign({"/src/index.tsx":I});let At=!1;for(const[,t]of Object.entries(ua))t&&(et.route("/",t),et.notFound(t.notFoundHandler),At=!0);if(!At)throw new Error("Can't import modules from ['/src/index.tsx','/app/server.ts']");export{et as default};
