@@ -4,6 +4,106 @@ let allAgents = [], models = [], chatHistory = []
 let _activeAgentId = null          // agente aberto no painel direito
 let _inlineSessions = {}           // agentId -> { history, streaming }
 
+// ════════════════════════════════════════════════════════════
+// AUTH — Login / Logout
+// ════════════════════════════════════════════════════════════
+async function checkAuth() {
+  try {
+    const res = await fetch('/api/me')
+    if (res.ok) {
+      const data = await res.json()
+      if (data.ok) { _showApp(data.user); return }
+    }
+  } catch {}
+  _showLogin()
+}
+
+function _showLogin() {
+  const overlay = document.getElementById('login-overlay')
+  if (overlay) overlay.classList.remove('hidden')
+  setTimeout(() => {
+    const u = document.getElementById('l-user')
+    if (u) u.focus()
+  }, 80)
+}
+
+function _showApp(user) {
+  const overlay = document.getElementById('login-overlay')
+  if (overlay) overlay.classList.add('hidden')
+  // Mostrar nome do usuário e botão sair no header
+  const hdrUser = document.getElementById('hdr-user')
+  const hdrUsername = document.getElementById('hdr-username')
+  const logoutBtn = document.getElementById('logout-btn')
+  if (hdrUser)     { hdrUser.style.display = 'flex' }
+  if (hdrUsername) { hdrUsername.textContent = user }
+  if (logoutBtn)   { logoutBtn.style.display = 'flex' }
+  // Inicializar app
+  init()
+}
+
+async function doLogin() {
+  const userEl  = document.getElementById('l-user')
+  const passEl  = document.getElementById('l-pass')
+  const btn     = document.getElementById('login-btn')
+  const errEl   = document.getElementById('login-error')
+
+  const username = userEl?.value.trim()
+  const password = passEl?.value
+
+  if (!username || !password) {
+    _loginError('Preencha usuário e senha')
+    return
+  }
+
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin" style="margin-right:8px"></i>Entrando...' }
+  if (errEl) errEl.style.display = 'none'
+
+  try {
+    const res = await fetch('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    })
+    const data = await res.json()
+    if (data.ok) {
+      if (passEl) passEl.value = ''
+      _showApp(data.user)
+    } else {
+      _loginError(data.error || 'Usuário ou senha incorretos')
+    }
+  } catch (e) {
+    _loginError('Erro de conexão. Tente novamente.')
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-sign-in-alt" style="margin-right:8px"></i>Entrar' }
+  }
+}
+
+function _loginError(msg) {
+  const errEl = document.getElementById('login-error')
+  if (errEl) { errEl.textContent = msg; errEl.style.display = 'block' }
+  const passEl = document.getElementById('l-pass')
+  if (passEl) { passEl.value = ''; passEl.focus() }
+}
+
+async function doLogout() {
+  try { await fetch('/api/logout', { method: 'POST' }) } catch {}
+  // Ocultar app, mostrar login
+  const hdrUser   = document.getElementById('hdr-user')
+  const logoutBtn = document.getElementById('logout-btn')
+  if (hdrUser)   hdrUser.style.display = 'none'
+  if (logoutBtn) logoutBtn.style.display = 'none'
+  // Reset estado
+  allAgents = []; models = []; chatHistory = []
+  _activeAgentId = null; _inlineSessions = {}
+  // Limpar tela
+  const cats = document.getElementById('sidebar-categories')
+  if (cats) cats.innerHTML = ''
+  const catsGrid = document.getElementById('cats-grid')
+  if (catsGrid) catsGrid.innerHTML = ''
+  showHome(null)
+  _showLogin()
+}
+
 // ── Categorias: ícone e cor
 const CAT_META = {
   'Orquestração':   { icon: '🎯', color: '#22D3EE' },
@@ -693,8 +793,8 @@ function mdToHtml(md) {
   return s
 }
 
-// Inicializar quando DOM pronto
-document.addEventListener('DOMContentLoaded', init)
+// Inicializar quando DOM pronto — verifica sessão antes de mostrar o app
+document.addEventListener('DOMContentLoaded', checkAuth)
 
 // Listener global para perguntas rápidas do chat full-screen
 document.addEventListener('click', function(e) {

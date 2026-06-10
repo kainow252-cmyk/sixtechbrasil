@@ -644,12 +644,92 @@ function smartRoute(task: string): string[] {
   return [...new Set(agents)]
 }
 
+// ─── AUTH CONFIG ─────────────────────────────────────────────────────────────
+const AUTH_USERS: Record<string, string> = {
+  'sixtech':  'sixtech@2025',
+  'admin':    'Admin@SixTech1',
+}
+const SESSION_COOKIE = 'st_sess'
+const SESSION_TTL    = 60 * 60 * 8   // 8 horas em segundos
+
+// Gera token de sessão aleatório (Web Crypto — disponível no CF Workers)
+function genToken(): string {
+  const arr = new Uint8Array(24)
+  crypto.getRandomValues(arr)
+  return Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('')
+}
+
+// Sessões em memória (válidas enquanto o worker está ativo)
+const SESSIONS = new Map<string, { user: string; exp: number }>()
+
+// Verifica se a request tem sessão válida
+function getSession(c: any): { user: string } | null {
+  const cookieHeader = c.req.header('cookie') || ''
+  const match = cookieHeader.match(new RegExp(`(?:^|;\\s*)${SESSION_COOKIE}=([^;]+)`))
+  if (!match) return null
+  const token = match[1]
+  const sess = SESSIONS.get(token)
+  if (!sess) return null
+  if (Date.now() / 1000 > sess.exp) { SESSIONS.delete(token); return null }
+  return { user: sess.user }
+}
+
 // ─── HONO APP ─────────────────────────────────────────────────────────────────
 const app = new Hono<{ Bindings: Bindings }>()
 app.use('*', cors())
 
 // ── GET /favicon.ico — evita 500 no browser
 app.get('/favicon.ico', (c) => new Response(null, { status: 204 }))
+
+// ── POST /api/login ───────────────────────────────────────────────────────────
+app.post('/api/login', async (c) => {
+  const { username, password } = await c.req.json() as { username: string; password: string }
+  const expected = AUTH_USERS[username?.trim()]
+  if (!expected || expected !== password) {
+    return c.json({ ok: false, error: 'Usuário ou senha incorretos' }, 401)
+  }
+  const token = genToken()
+  SESSIONS.set(token, { user: username.trim(), exp: Math.floor(Date.now() / 1000) + SESSION_TTL })
+  const cookieVal = `${SESSION_COOKIE}=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${SESSION_TTL}`
+  return new Response(JSON.stringify({ ok: true, user: username.trim() }), {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/json',
+      'Set-Cookie': cookieVal,
+      'Access-Control-Allow-Origin': '*'
+    }
+  })
+})
+
+// ── POST /api/logout ──────────────────────────────────────────────────────────
+app.post('/api/logout', (c) => {
+  const cookieHeader = c.req.header('cookie') || ''
+  const match = cookieHeader.match(new RegExp(`(?:^|;\\s*)${SESSION_COOKIE}=([^;]+)`))
+  if (match) SESSIONS.delete(match[1])
+  return new Response(JSON.stringify({ ok: true }), {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/json',
+      'Set-Cookie': `${SESSION_COOKIE}=; Path=/; Max-Age=0`
+    }
+  })
+})
+
+// ── GET /api/me — checa sessão ────────────────────────────────────────────────
+app.get('/api/me', (c) => {
+  const sess = getSession(c)
+  if (!sess) return c.json({ ok: false }, 401)
+  return c.json({ ok: true, user: sess.user })
+})
+
+// ── Middleware: protege todas as rotas /api/* (exceto /api/login e /api/me) ───
+app.use('/api/*', async (c, next) => {
+  const path = new URL(c.req.url).pathname
+  if (path === '/api/login' || path === '/api/me' || path === '/api/logout') return next()
+  const sess = getSession(c)
+  if (!sess) return c.json({ error: 'Não autorizado', code: 401 }, 401)
+  return next()
+})
 
 // ── GET /api/agents ────────────────────────────────────────────────────────
 app.get('/api/agents', (c) => {
@@ -821,6 +901,51 @@ app.get('/', (c) => {
 html,body{height:100%;overflow:hidden}
 body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-serif;display:flex;flex-direction:column}
 ::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:var(--bg)}::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+/* ── Login Overlay ────────────────────────────────────────── */
+#login-overlay{
+  position:fixed;inset:0;z-index:9999;
+  background:var(--bg);
+  display:flex;align-items:center;justify-content:center;
+}
+#login-overlay.hidden{display:none}
+.login-box{
+  width:100%;max-width:400px;
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:20px;padding:36px 32px 32px;
+  display:flex;flex-direction:column;align-items:center;gap:0;
+  box-shadow:0 24px 60px rgba(0,0,0,.5);
+}
+.login-logo{
+  width:56px;height:56px;border-radius:16px;
+  background:linear-gradient(135deg,#6C63FF,#22D3EE);
+  display:flex;align-items:center;justify-content:center;
+  font-size:28px;margin-bottom:14px;
+}
+.login-title{font-size:22px;font-weight:800;color:#fff;text-align:center;margin-bottom:4px}
+.login-sub{font-size:12px;color:var(--muted);text-align:center;margin-bottom:28px}
+.login-field{width:100%;margin-bottom:14px}
+.login-label{display:block;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
+.login-input{
+  width:100%;background:var(--bg);border:1px solid var(--border);
+  color:var(--text);border-radius:10px;padding:11px 14px;
+  font-size:14px;font-family:inherit;
+}
+.login-input:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(108,99,255,.18)}
+.login-btn{
+  width:100%;margin-top:8px;padding:13px;border-radius:12px;
+  background:linear-gradient(135deg,var(--primary),#4f46e5);
+  color:#fff;border:none;font-size:15px;font-weight:700;
+  cursor:pointer;transition:opacity .15s;
+}
+.login-btn:hover{opacity:.88}
+.login-btn:disabled{opacity:.45;cursor:not-allowed}
+.login-error{
+  width:100%;margin-top:12px;padding:10px 14px;border-radius:10px;
+  background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);
+  color:#F87171;font-size:13px;text-align:center;display:none;
+}
+.login-footer{margin-top:20px;font-size:11px;color:var(--muted);text-align:center}
 
 /* ── Header ───────────────────────────────────────────────── */
 header{
@@ -1175,6 +1300,36 @@ select option{background:var(--card)}
 </head>
 <body>
 
+<!-- ══ LOGIN OVERLAY ════════════════════════════════════════ -->
+<div id="login-overlay">
+  <div class="login-box">
+    <div class="login-logo">🤖</div>
+    <div class="login-title">SixTech MAS</div>
+    <div class="login-sub">Multi-Agent System v3.0 · Cloudflare Workers AI</div>
+
+    <div class="login-field">
+      <label class="login-label" for="l-user">Usuário</label>
+      <input class="login-input" type="text" id="l-user" placeholder="Digite seu usuário"
+        autocomplete="username" onkeydown="if(event.key==='Enter')document.getElementById('l-pass').focus()">
+    </div>
+    <div class="login-field">
+      <label class="login-label" for="l-pass">Senha</label>
+      <input class="login-input" type="password" id="l-pass" placeholder="••••••••••"
+        autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
+
+    <button class="login-btn" id="login-btn" onclick="doLogin()">
+      <i class="fas fa-sign-in-alt" style="margin-right:8px"></i>Entrar
+    </button>
+    <div class="login-error" id="login-error"></div>
+
+    <div class="login-footer">
+      <i class="fas fa-lock" style="margin-right:4px"></i>
+      Acesso restrito · SixTech Brasil
+    </div>
+  </div>
+</div>
+
 <!-- HEADER -->
 <header>
   <div class="hdr-left">
@@ -1192,9 +1347,16 @@ select option{background:var(--card)}
       <span class="pulse"></span>
       <span id="status-text">Online</span>
     </div>
+    <div id="hdr-user" style="display:none;align-items:center;gap:6px;font-size:12px;color:var(--muted);padding:5px 10px;background:var(--card);border:1px solid var(--border);border-radius:8px">
+      <i class="fas fa-user-circle" style="color:var(--primary)"></i>
+      <span id="hdr-username">—</span>
+    </div>
     <a href="https://github.com/kainow252-cmyk/sixtechbrasil" target="_blank" class="btn-gh">
       <i class="fab fa-github"></i> GitHub
     </a>
+    <button class="btn-gh" id="logout-btn" style="display:none" onclick="doLogout()" title="Sair">
+      <i class="fas fa-sign-out-alt"></i> Sair
+    </button>
   </div>
 </header>
 
