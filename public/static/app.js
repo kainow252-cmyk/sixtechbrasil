@@ -24,33 +24,36 @@ async function init() {
 }
 
 // ── Tabs
-function showTab(name) {
+function showTab(name, el) {
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'))
-  document.querySelectorAll('.tab-btn').forEach(b => {
-    b.classList.remove('active')
-    b.style.background = 'transparent'
-    b.style.color = '#6B7280'
-  })
-  document.getElementById('tab-' + name).classList.add('active')
-  const btn = event.currentTarget
-  btn.classList.add('active')
-  btn.style.background = 'var(--card)'
-  btn.style.color = 'white'
+  document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'))
+  const panel = document.getElementById('tab-' + name)
+  if (panel) panel.classList.add('active')
+  if (el) el.classList.add('active')
+  // fechar sidebar no mobile após clicar
+  if (window.innerWidth <= 540) {
+    const s = document.getElementById('sidebar')
+    const o = document.getElementById('sidebar-overlay')
+    if (s && !s.classList.contains('collapsed')) {
+      s.classList.add('collapsed')
+      if (o) o.style.display = 'none'
+    }
+  }
 }
 
 // ── Agent Checklist
 function renderAgentChecklist() {
   const container = document.getElementById('agent-checklist')
   container.innerHTML = agents.map(a => `
-    <label class="flex items-center gap-3 p-2 rounded-xl cursor-pointer hover:bg-white/5 transition-colors agent-check-item" data-source="${a.source}">
-      <input type="checkbox" value="${a.id}" class="accent-purple-500 agent-checkbox"
+    <label class="agent-check-item" data-source="${a.source}">
+      <input type="checkbox" value="${a.id}" class="agent-checkbox"
         onchange="updateAgentCount()">
-      <span class="text-lg">${a.emoji}</span>
-      <div class="flex-1 min-w-0">
-        <div class="text-sm font-medium text-white truncate">${a.name}</div>
-        <div class="text-xs truncate" style="color:#6B7280">${a.category}</div>
+      <span style="font-size:16px">${a.emoji}</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:500;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${a.name}</div>
+        <div style="font-size:10px;color:#6B7280">${a.category}</div>
       </div>
-      <span class="badge ${a.source === 'hybrid' ? 'badge-hybrid' : 'badge-cf'} shrink-0">
+      <span class="badge ${a.source === 'hybrid' ? 'badge-hybrid' : 'badge-cf'}">
         ${a.source === 'hybrid' ? 'hybrid' : 'cf'}
       </span>
     </label>
@@ -103,7 +106,7 @@ async function runPipeline() {
 
   // Progress bar
   const pb = document.getElementById('progress-bar')
-  pb.classList.remove('hidden')
+  pb.style.display=''
   const steps = document.getElementById('progress-steps')
   steps.innerHTML = selectedIds.map((id) => {
     const a = agents.find(x => x.id === id)
@@ -179,18 +182,18 @@ function renderResult(r, container) {
   const modelName = r.model ? r.model.split('/').pop() : ''
 
   const el = document.createElement('div')
-  el.className = 'result-card glass rounded-2xl overflow-hidden'
+  el.className = 'result-card'
   el.innerHTML = `
-    <div class="flex items-center gap-3 p-4" style="border-bottom:1px solid var(--border);background:linear-gradient(90deg,${r.color}22,transparent)">
-      <span class="text-2xl">${r.emoji}</span>
-      <div class="flex-1">
-        <div class="font-semibold text-white">${r.name}</div>
-        <div class="text-xs" style="color:#6B7280">${modelName}</div>
+    <div class="result-header">
+      <span class="result-emoji">${r.emoji}</span>
+      <div style="flex:1">
+        <div class="result-name">${r.name}</div>
+        <div class="result-model">${modelName}</div>
       </div>
       <span class="badge ${sourceBadge}">${sourceLabel}</span>
-      <span class="text-xs" style="color:#6B7280">${(r.duration/1000).toFixed(1)}s</span>
+      <span style="font-size:10px;color:var(--muted)">${(r.duration/1000).toFixed(1)}s</span>
     </div>
-    <div class="p-5 text-sm leading-relaxed" style="color:#D1D5DB">${formatted}</div>
+    <div class="result-body">${formatted}</div>
   `
   container.appendChild(el)
   el.scrollIntoView({behavior:'smooth', block:'nearest'})
@@ -227,18 +230,18 @@ async function sendChat() {
 
   if (agentId) {
     appendChatMsg('user', msg)
-    document.getElementById('typing-indicator').classList.remove('hidden')
+    document.getElementById('typing-indicator').style.display=''
     try {
       const res = await fetch('/api/agent/' + agentId, {
         method: 'POST', headers: {'Content-Type':'application/json'},
         body: JSON.stringify({message: msg})
       })
       const data = await res.json()
-      document.getElementById('typing-indicator').classList.add('hidden')
+      document.getElementById('typing-indicator').style.display='none'
       const agent = agents.find(a => a.id === agentId)
       appendChatMsg('assistant', data.response || 'Sem resposta', agent ? agent.name : 'Agente', agent ? agent.emoji : '🤖')
     } catch(e) {
-      document.getElementById('typing-indicator').classList.add('hidden')
+      document.getElementById('typing-indicator').style.display='none'
       appendChatMsg('assistant', '❌ Erro: ' + e.message)
     }
     return
@@ -248,13 +251,13 @@ async function sendChat() {
   const model = document.getElementById('chat-model').value
   chatHistory.push({role: 'user', content: msg})
   appendChatMsg('user', msg)
-  document.getElementById('typing-indicator').classList.remove('hidden')
+  document.getElementById('typing-indicator').style.display=''
   document.getElementById('chat-send-btn').disabled = true
 
   const chatMsgs = document.getElementById('chat-messages')
   const aiEl = document.createElement('div')
-  aiEl.className = 'msg-ai rounded-xl p-4 text-sm'
-  aiEl.innerHTML = '<div class="font-medium mb-1" style="color:#22D3EE">🤖 Assistente</div><div class="streaming-text"></div>'
+  aiEl.className = 'msg msg-ai'
+  aiEl.innerHTML = '<div class="msg-name ai">🤖 Assistente</div><div class="streaming-text"></div>'
   chatMsgs.appendChild(aiEl)
   const textEl = aiEl.querySelector('.streaming-text')
   chatMsgs.scrollTop = 9999
@@ -300,7 +303,7 @@ async function sendChat() {
     textEl.textContent = '❌ Erro: ' + e.message
   }
 
-  document.getElementById('typing-indicator').classList.add('hidden')
+  document.getElementById('typing-indicator').style.display='none'
   document.getElementById('chat-send-btn').disabled = false
 }
 
@@ -309,11 +312,11 @@ function appendChatMsg(role, text, name, emoji) {
   emoji = emoji || '🤖'
   const chatMsgs = document.getElementById('chat-messages')
   const el = document.createElement('div')
-  el.className = role === 'user' ? 'msg-user rounded-xl p-4 text-sm ml-8' : 'msg-ai rounded-xl p-4 text-sm'
+  el.className = role === 'user' ? 'msg msg-user' : 'msg msg-ai'
   if (role === 'user') {
-    el.innerHTML = `<div class="font-medium mb-1" style="color:#a5b4fc">👤 Você</div><div>${escHtml(text)}</div>`
+    el.innerHTML = `<div class="msg-name user">👤 Você</div><div>${escHtml(text)}</div>`
   } else {
-    el.innerHTML = `<div class="font-medium mb-1" style="color:#22D3EE">${emoji} ${name}</div><div>${mdToHtml(text)}</div>`
+    el.innerHTML = `<div class="msg-name ai">${emoji} ${name}</div><div>${mdToHtml(text)}</div>`
   }
   chatMsgs.appendChild(el)
   chatMsgs.scrollTop = 9999
@@ -333,8 +336,8 @@ function clearChat() {
   chatHistory = []
   const chatMsgs = document.getElementById('chat-messages')
   chatMsgs.innerHTML = `
-    <div class="msg-ai rounded-xl p-4 text-sm">
-      <div class="font-medium mb-1" style="color:#22D3EE">🤖 Assistente SixTech</div>
+    <div class="msg msg-ai">
+      <div class="msg-name ai">🤖 Assistente SixTech</div>
       <div>Olá! Como posso ajudar?</div>
     </div>`
   const list = document.getElementById('chat-history-list')
@@ -347,35 +350,22 @@ function renderAgentsGrid(filtered) {
   const grid = document.getElementById('agents-grid')
   if (!grid) return
   grid.innerHTML = list.map(a => `
-    <div class="agent-card glass rounded-2xl overflow-hidden">
-      <div class="p-5" style="border-bottom:1px solid var(--border);background:linear-gradient(135deg,${a.color}22,transparent)">
-        <div class="flex items-start justify-between mb-3">
-          <div class="flex items-center gap-3">
-            <span class="text-3xl">${a.emoji}</span>
-            <div>
-              <div class="font-bold text-white">${a.name}</div>
-              <div class="text-xs" style="color:#6B7280">${a.category}</div>
-            </div>
-          </div>
-          <span class="badge ${a.source === 'hybrid' ? 'badge-hybrid' : 'badge-cf'}">${a.source}</span>
+    <div class="agent-card">
+      <div class="agent-card-hdr">
+        <div class="agent-icon" style="background:${a.color}33">${a.emoji}</div>
+        <div>
+          <div class="agent-card-name">${a.name}</div>
+          <div class="agent-card-model">${a.category}</div>
         </div>
-        <p class="text-xs leading-relaxed" style="color:#9CA3AF">${a.desc}</p>
+        <span class="badge ${a.source === 'hybrid' ? 'badge-hybrid' : 'badge-cf'}" style="margin-left:auto">${a.source}</span>
       </div>
-      <div class="p-4">
-        <div class="mb-3">
-          <div class="text-xs font-medium mb-2" style="color:#6B7280">CAPACIDADES</div>
-          <div class="flex flex-wrap gap-1">
-            ${(a.capabilities || []).map(c => `<span class="cap-pill">${c}</span>`).join('')}
-          </div>
-        </div>
-        ${a.basedOn ? `<div class="text-xs mb-3" style="color:#6B7280">📦 <span style="color:#a5b4fc">${a.basedOn}</span></div>` : ''}
-        <div class="text-xs mb-3" style="color:#6B7280">🤖 <span style="color:#22D3EE">${a.model ? a.model.split('/').pop() : ''}</span></div>
-        <button onclick="testAgent('${a.id}')"
-          class="w-full py-2 rounded-xl text-xs font-semibold"
-          style="background:rgba(108,99,255,.2);border:1px solid rgba(108,99,255,.4);color:#a5b4fc">
-          <i class="fas fa-flask mr-1"></i>Testar Agente
-        </button>
-      </div>
+      <div class="agent-card-desc">${a.desc}</div>
+      <div class="caps">${(a.capabilities || []).map(c => `<span class="cap-pill">${c}</span>`).join('')}</div>
+      ${a.basedOn ? `<div style="font-size:10px;color:#6B7280;margin-top:8px">📦 <span style="color:#a5b4fc">${a.basedOn}</span></div>` : ''}
+      <div style="font-size:10px;color:#6B7280;margin-top:4px">🤖 <span style="color:#22D3EE">${a.model ? a.model.split('/').pop() : ''}</span></div>
+      <button onclick="testAgent('${a.id}')" class="btn" style="width:100%;margin-top:10px;padding:7px;font-size:11px;background:rgba(108,99,255,.18);border:1px solid rgba(108,99,255,.35);color:#a5b4fc">
+        <i class="fas fa-flask"></i> Testar Agente
+      </button>
     </div>
   `).join('')
 }
@@ -389,15 +379,9 @@ function filterAgents(q) {
   renderAgentsGrid(filtered)
 }
 
-function filterBySource(src) {
-  document.querySelectorAll('.filter-btn').forEach(b => {
-    b.style.background = 'var(--card)'
-    b.style.color = 'var(--muted)'
-  })
-  if (event && event.currentTarget) {
-    event.currentTarget.style.background = 'var(--primary)'
-    event.currentTarget.style.color = 'white'
-  }
+function filterBySource(src, el) {
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'))
+  if (el) el.classList.add('active')
   renderAgentsGrid(src === 'all' ? allAgents : allAgents.filter(a => a.source === src))
 }
 
@@ -483,7 +467,7 @@ function clearAll() {
       <div class="text-white font-medium mb-2">Pronto para executar</div>
       <div class="text-sm" style="color:var(--muted)">Configure a tarefa, selecione os agentes e clique em Executar</div>
     </div>`
-  document.getElementById('progress-bar').classList.add('hidden')
+  document.getElementById('progress-bar').style.display='none'
 }
 
 // ── Utils
