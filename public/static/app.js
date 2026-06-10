@@ -1,9 +1,10 @@
 // SixTech MAS v3.0 — Frontend App
 // Estado global
-let agents = [], models = [], chatHistory = [], allAgents = []
+let allAgents = [], models = [], chatHistory = []
 let currentCategory = null
+let _inlineSessions = {}   // agentId -> { history: [], streaming: false }
 
-// ── Categorias: ícone, cor de destaque
+// ── Categorias: ícone e cor
 const CAT_META = {
   'Orquestração':   { icon: '🎯', color: '#22D3EE' },
   'Administrativo': { icon: '🏢', color: '#6C63FF' },
@@ -29,6 +30,32 @@ const CAT_META = {
   'Diretoria':      { icon: '👑', color: '#92400E' },
 }
 
+// Perguntas rápidas por categoria
+const QUICK_QUESTIONS = {
+  'Financeiro':     ['Faça um DRE simples', 'Analise fluxo de caixa', 'Monte um budget mensal'],
+  'Crédito':        ['Analise perfil de crédito', 'Crie régua de cobrança', 'Calcule score de risco'],
+  'Jurídico':       ['Revise este contrato', 'Explique a LGPD', 'Crie NDA simples'],
+  'Marketing':      ['Crie post para Instagram', 'Escreva e-mail marketing', 'Gere 5 ideias de conteúdo'],
+  'Comercial':      ['Crie script de vendas', 'Responda objeção de preço', 'Monte proposta comercial'],
+  'Tecnologia':     ['Crie uma API REST', 'Revise este código', 'Explique microserviços'],
+  'RH':             ['Crie job description', 'Monte roteiro de entrevista', 'Elabore um PDI'],
+  'Administrativo': ['Escreva e-mail formal', 'Crie ata de reunião', 'Monte agenda executiva'],
+  'Orquestração':   ['Analise esta tarefa', 'Faça análise SWOT', 'Revise esta entrega'],
+  'Diretoria':      ['Monte estratégia de negócio', 'Analise M&A', 'Crie plano de 90 dias'],
+  'Criativo':       ['Crie um slogan', 'Escreva roteiro de vídeo', 'Gere copy persuasivo'],
+  'Saúde':          ['Explique gestão hospitalar', 'Crie protocolo de atendimento', 'Indicadores de saúde'],
+  'Educação':       ['Crie plano de aula', 'Monte trilha de aprendizado', 'Alinhe à BNCC'],
+  'Logística':      ['Otimize rota de entrega', 'Analise supply chain', 'KPIs logísticos'],
+  'Imobiliário':    ['Avalie este imóvel', 'Explique financiamento', 'Documentação necessária'],
+  'Automotivo':     ['Compare veículos', 'Explique consórcio', 'Calcule financiamento'],
+  'Agronegócio':    ['Gestão de safra', 'Crédito rural disponível', 'Rastreabilidade de produto'],
+  'Governo':        ['Explique licitação', 'Prepare edital', 'Lei 14.133 na prática'],
+  'Turismo':        ['Monte roteiro de viagem', 'Documentos necessários', 'Pacotes econômicos'],
+  'Indústria':      ['Aplique Lean Manufacturing', 'Calcule OEE', 'Gestão ISO 9001'],
+  'Seguros':        ['Compare coberturas', 'Como acionar sinistro', 'Seguro ideal para empresa'],
+  'Afiliados':      ['Estruture comissões', 'Recrute afiliados', 'Métricas de performance'],
+}
+
 // ── Inicialização
 async function init() {
   try {
@@ -37,119 +64,117 @@ async function init() {
     ])
     const agentsData = await agentsRes.json()
     const modelsData = await modelsRes.json()
-    agents = agentsData.agents
-    allAgents = [...agents]
+    allAgents = agentsData.agents
     models = modelsData.models
 
     renderSidebarCategories()
-    renderAgentChecklist()
-    renderAgentsGrid(allAgents)
+    renderHomeCats()
     renderChatModels()
     loadStatus()
 
-    // Atualizar stats sidebar
     const sbA = document.getElementById('sb-agents')
-    if (sbA) sbA.textContent = agents.length
+    if (sbA) sbA.textContent = allAgents.length
   } catch(e) {
     console.error('Init error:', e)
   }
 }
 
-// ── Sidebar: renderizar categorias colapsáveis
+// ── Sidebar: categorias como links diretos (sem sub-itens)
 function renderSidebarCategories() {
   const container = document.getElementById('sidebar-categories')
   if (!container) return
 
-  // Agrupar agentes por categoria (mantendo ordem do CAT_META)
   const groups = {}
   for (const cat of Object.keys(CAT_META)) {
-    const catAgents = allAgents.filter(a => a.category === cat)
-    if (catAgents.length > 0) groups[cat] = catAgents
+    const list = allAgents.filter(a => a.category === cat)
+    if (list.length > 0) groups[cat] = list
   }
+  // Categorias não mapeadas no CAT_META
   for (const a of allAgents) {
     if (!groups[a.category]) groups[a.category] = allAgents.filter(x => x.category === a.category)
   }
 
-  // Montar HTML sem onclick inline — usar data-* e addEventListener
-  container.innerHTML = Object.entries(groups).map(([cat, catAgents]) => {
+  container.innerHTML = Object.entries(groups).map(([cat, list]) => {
     const meta = CAT_META[cat] || { icon: '🤖', color: '#6C63FF' }
-    const items = catAgents.map(a => `
-      <div class="cat-agent-item" data-agent-id="${a.id}" data-cat="${encodeURIComponent(cat)}">
-        <span class="ag-emoji">${a.emoji}</span>
-        <span class="ag-name">${a.name}</span>
-        <span class="ag-badge ${a.source === 'hybrid' ? 'badge-hybrid' : 'badge-cf'}">${a.source === 'hybrid' ? '⚡' : '☁️'}</span>
-      </div>
-    `).join('')
-
     return `
-      <div class="cat-group">
-        <div class="cat-header" data-cat="${encodeURIComponent(cat)}">
-          <span class="cat-icon" style="background:${meta.color}22">${meta.icon}</span>
-          <span class="cat-name">${cat}</span>
-          <span class="cat-count">${catAgents.length}</span>
-          <span class="cat-arrow">›</span>
-        </div>
-        <div class="cat-agents">
-          ${items}
-        </div>
-      </div>
-    `
+      <div class="cat-header" data-cat="${encodeURIComponent(cat)}">
+        <span class="cat-icon" style="background:${meta.color}22">${meta.icon}</span>
+        <span class="cat-name">${cat}</span>
+        <span class="cat-count">${list.length}</span>
+      </div>`
   }).join('')
 
-  // Delegar eventos via bubbling — zero onclick inline
+  // Event delegation — zero onclick inline
   container.addEventListener('click', function(e) {
-    // Click no cat-header (ou filho dele)
     const header = e.target.closest('.cat-header')
     if (header) {
       const cat = decodeURIComponent(header.dataset.cat)
-      _toggleCategory(header, cat)
-      return
-    }
-    // Click no cat-agent-item (ou filho dele)
-    const item = e.target.closest('.cat-agent-item')
-    if (item) {
-      const cat = decodeURIComponent(item.dataset.cat)
-      const agentId = item.dataset.agentId
-      _openCategoryAgent(item, cat, agentId)
+      openCategoryScreen(cat, header)
     }
   })
 }
 
-// ── Toggle categoria (apenas expande/recolhe na sidebar — não muda tab)
-function _toggleCategory(headerEl, cat) {
-  const agentsEl = headerEl.nextElementSibling
-  const isOpen = agentsEl.classList.contains('open')
+// ── Home: grid de categorias
+function renderHomeCats() {
+  const grid = document.getElementById('cats-grid')
+  if (!grid) return
 
-  // Fechar todos
-  document.querySelectorAll('.cat-agents').forEach(el => el.classList.remove('open'))
-  document.querySelectorAll('.cat-header').forEach(el => el.classList.remove('open'))
-
-  if (!isOpen) {
-    agentsEl.classList.add('open')
-    headerEl.classList.add('open')
-    // NÃO muda de tab — só expande a lista de agentes na sidebar
+  const groups = {}
+  for (const cat of Object.keys(CAT_META)) {
+    const list = allAgents.filter(a => a.category === cat)
+    if (list.length > 0) groups[cat] = list
   }
+
+  grid.innerHTML = Object.entries(groups).map(([cat, list]) => {
+    const meta = CAT_META[cat] || { icon: '🤖', color: '#6C63FF' }
+    return `
+      <div class="cat-card anim-in" onclick="_openCatFromCard('${encodeURIComponent(cat)}')">
+        <div class="cat-card-icon" style="background:${meta.color}22">${meta.icon}</div>
+        <div class="cat-card-name">${cat}</div>
+        <div class="cat-card-count">${list.length} agente${list.length !== 1 ? 's' : ''}</div>
+      </div>`
+  }).join('')
 }
 
-// ── Abrir categoria → mostra tab agentes filtrada
-function openCategory(cat) {
-  currentCategory = cat
-  const filtered = allAgents.filter(a => a.category === cat)
-  const meta = CAT_META[cat] || { icon: '🤖', color: '#6C63FF' }
+function _openCatFromCard(encodedCat) {
+  const cat = decodeURIComponent(encodedCat)
+  openCategoryScreen(cat, null)
+}
 
-  // Mostrar tab agentes
+// ── Abrir tela de agentes de uma categoria
+function openCategoryScreen(cat, sidebarEl) {
+  currentCategory = cat
+  const meta = CAT_META[cat] || { icon: '🤖', color: '#6C63FF' }
+  const list = allAgents.filter(a => a.category === cat)
+
+  // Atualizar header da tela de agentes
+  const iconEl = document.getElementById('agents-screen-icon')
+  const titleEl = document.getElementById('agents-screen-title')
+  const subEl = document.getElementById('agents-screen-sub')
+  if (iconEl) { iconEl.textContent = meta.icon; iconEl.style.background = meta.color + '22' }
+  if (titleEl) titleEl.textContent = cat
+  if (subEl) subEl.textContent = `${list.length} agente${list.length !== 1 ? 's' : ''} especializados disponíveis`
+
+  // Limpar busca
+  const searchEl = document.getElementById('agent-search')
+  if (searchEl) searchEl.value = ''
+
+  // Renderizar cards
+  renderAgentsGrid(list)
+
+  // Ativar tab-agents
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'))
   document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'))
   const panel = document.getElementById('tab-agents')
   if (panel) panel.classList.add('active')
 
-  // Atualizar header
-  const titleEl = document.getElementById('agents-cat-title')
-  const subEl = document.getElementById('agents-cat-sub')
-  if (titleEl) titleEl.textContent = meta.icon + ' ' + cat
-  if (subEl) subEl.textContent = filtered.length + ' agente' + (filtered.length !== 1 ? 's' : '') + ' disponíve' + (filtered.length !== 1 ? 'is' : 'l')
-
-  renderAgentsGrid(filtered)
+  // Destacar categoria ativa na sidebar
+  document.querySelectorAll('.cat-header').forEach(el => el.classList.remove('active-cat'))
+  if (sidebarEl) sidebarEl.classList.add('active-cat')
+  else {
+    const target = document.querySelector(`.cat-header[data-cat="${encodeURIComponent(cat)}"]`)
+    if (target) target.classList.add('active-cat')
+  }
 
   // Fechar sidebar no mobile
   if (window.innerWidth <= 540) {
@@ -162,38 +187,27 @@ function openCategory(cat) {
   }
 }
 
-// ── Click no agente da sidebar → abre modal direto (mesma tela)
-function _openCategoryAgent(itemEl, cat, agentId) {
-  // Marcar ativo na sidebar
-  document.querySelectorAll('.cat-agent-item').forEach(el => el.classList.remove('active'))
-  itemEl.classList.add('active')
-  // Abrir modal do agente sem mudar de tab
-  openAgentModal(agentId)
-}
-
-// ── Voltar para todos os agentes
-function showAllAgents() {
+// ── Voltar para Home
+function showHome(el) {
   currentCategory = null
-  const titleEl = document.getElementById('agents-cat-title')
-  const subEl = document.getElementById('agents-cat-sub')
-  if (titleEl) titleEl.textContent = 'Todos os Agentes'
-  if (subEl) subEl.textContent = allAgents.length + ' agentes disponíveis'
-  renderAgentsGrid(allAgents)
-  document.querySelectorAll('.cat-header').forEach(el => el.classList.remove('open'))
-  document.querySelectorAll('.cat-agents').forEach(el => el.classList.remove('open'))
-  document.querySelectorAll('.cat-agent-item').forEach(el => el.classList.remove('active'))
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'))
+  document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'))
+  const panel = document.getElementById('tab-home')
+  if (panel) panel.classList.add('active')
+  document.querySelectorAll('.cat-header').forEach(el => el.classList.remove('active-cat'))
+  const navHome = document.getElementById('nav-home')
+  if (navHome) navHome.classList.add('active')
+  if (el) el.classList.add('active')
 }
 
-// ── Tabs
+// ── Tabs (Chat, Status)
 function showTab(name, el) {
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'))
   document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'))
+  document.querySelectorAll('.cat-header').forEach(c => c.classList.remove('active-cat'))
   const panel = document.getElementById('tab-' + name)
   if (panel) panel.classList.add('active')
   if (el) el.classList.add('active')
-  // Se voltou para agents sem categoria, mostrar todos
-  if (name === 'agents' && !currentCategory) showAllAgents()
-  // fechar sidebar no mobile
   if (window.innerWidth <= 540) {
     const s = document.getElementById('sidebar')
     const o = document.getElementById('sidebar-overlay')
@@ -204,165 +218,226 @@ function showTab(name, el) {
   }
 }
 
-// ── Agent Checklist
-function renderAgentChecklist() {
-  const container = document.getElementById('agent-checklist')
-  container.innerHTML = agents.map(a => `
-    <label class="agent-check-item" data-source="${a.source}">
-      <input type="checkbox" value="${a.id}" class="agent-checkbox"
-        onchange="updateAgentCount()">
-      <span style="font-size:16px">${a.emoji}</span>
-      <div style="flex:1;min-width:0">
-        <div style="font-size:12px;font-weight:500;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${a.name}</div>
-        <div style="font-size:10px;color:#6B7280">${a.category}</div>
-      </div>
-      <span class="badge ${a.source === 'hybrid' ? 'badge-hybrid' : 'badge-cf'}">
-        ${a.source === 'hybrid' ? 'hybrid' : 'cf'}
-      </span>
-    </label>
-  `).join('')
-  updateAgentCount()
-}
+// ── Render grid de agentes com inline chat
+function renderAgentsGrid(list) {
+  if (!list) list = allAgents
+  const grid = document.getElementById('agents-grid')
+  if (!grid) return
 
-function updateAgentCount() {
-  const count = document.querySelectorAll('.agent-checkbox:checked').length
-  document.getElementById('agent-count').textContent = count + ' selecionados'
-}
-
-// ── Auto Routing
-async function autoRoute() {
-  const task = document.getElementById('pipeline-task').value.trim()
-  if (!task) return
-
-  document.querySelectorAll('.agent-checkbox').forEach(cb => cb.checked = false)
-  try {
-    const res = await fetch('/api/orchestrate', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({task})
-    })
-    if (!res.ok) return
-    const data = await res.json()
-    data.agentsUsed.forEach(id => {
-      const cb = document.querySelector(`.agent-checkbox[value="${id}"]`)
-      if (cb) cb.checked = true
-    })
-    updateAgentCount()
-    document.querySelector('input[name="mode"][value="orchestrate"]').checked = true
-  } catch(e) {
-    console.error('autoRoute error:', e)
+  if (!list.length) {
+    grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--muted)">Nenhum agente encontrado</div>'
+    return
   }
-}
 
-// ── Run Pipeline
-async function runPipeline() {
-  const task = document.getElementById('pipeline-task').value.trim()
-  if (!task) { alert('Digite uma tarefa!'); return }
+  grid.innerHTML = list.map(a => {
+    const qq = QUICK_QUESTIONS[a.category] || QUICK_QUESTIONS['Orquestração'] || []
+    const quickBtns = qq.map(q =>
+      `<button class="inline-qbtn" data-agent-id="${a.id}" data-q="${escHtml(q)}">${q}</button>`
+    ).join('')
 
-  const selectedIds = [...document.querySelectorAll('.agent-checkbox:checked')].map(cb => cb.value)
-  if (!selectedIds.length) { alert('Selecione ao menos um agente!'); return }
-
-  const mode = document.querySelector('input[name="mode"]:checked').value
-  const btn = document.getElementById('run-btn')
-  btn.disabled = true
-  btn.innerHTML = '<i class="fas fa-spinner spin mr-2"></i>Executando...'
-
-  // Progress bar
-  const pb = document.getElementById('progress-bar')
-  pb.style.display=''
-  const steps = document.getElementById('progress-steps')
-  steps.innerHTML = selectedIds.map((id) => {
-    const a = agents.find(x => x.id === id)
-    return `<div class="progress-step pending flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs" id="step-${id}"
-      style="background:var(--card);border:1px solid var(--border)">
-      <span>${a ? a.emoji : '🤖'}</span><span>${a ? a.name : id}</span>
+    return `
+    <div class="agent-card anim-in" id="card-${a.id}">
+      <div class="agent-card-top">
+        <div class="agent-card-hdr">
+          <div class="agent-icon" style="background:${a.color}33">${a.emoji}</div>
+          <div style="flex:1;min-width:0">
+            <div class="agent-card-name">${a.name}</div>
+            <div class="agent-card-cat">${a.category}</div>
+          </div>
+          <span class="badge ${a.source === 'hybrid' ? 'badge-hybrid' : 'badge-cf'}">${a.source === 'hybrid' ? '⚡ hybrid' : '☁️ cf'}</span>
+        </div>
+        <div class="agent-card-desc">${a.desc}</div>
+        <div class="caps">${(a.capabilities || []).map(c => `<span class="cap-pill">${c}</span>`).join('')}</div>
+        ${a.basedOn ? `<div style="font-size:10px;color:#6B7280;margin-top:6px">📦 <span style="color:#a5b4fc">${a.basedOn}</span></div>` : ''}
+      </div>
+      <button class="agent-card-btn" id="btn-${a.id}" onclick="toggleInlineChat('${a.id}')">
+        <i class="fas fa-comments"></i> Conversar com ${a.name.split(' ')[0]}
+      </button>
+      <div class="inline-chat" id="inline-${a.id}">
+        <div class="inline-chat-hdr">
+          <span>${a.emoji} ${a.name}</span>
+          <button onclick="toggleInlineChat('${a.id}')" title="Fechar">✕</button>
+        </div>
+        <div class="inline-msgs" id="msgs-${a.id}">
+          <div class="inline-msg ai">
+            <div class="mn ai">${a.emoji} ${a.name}</div>
+            <div>Olá! Sou o <strong>${a.name}</strong>. ${a.desc}<br>Como posso ajudar?</div>
+          </div>
+        </div>
+        <div class="inline-typing" id="typing-${a.id}">
+          <span style="display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--secondary);animation:pulse 1s infinite;margin-right:4px"></span>digitando...
+        </div>
+        <div class="inline-quick">${quickBtns}</div>
+        <div class="inline-input-row">
+          <textarea id="input-${a.id}" placeholder="Digite aqui... (Enter para enviar)"
+            onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();inlineSend('${a.id}')}"></textarea>
+          <button class="inline-send-btn" id="sbtn-${a.id}" onclick="inlineSend('${a.id}')">
+            <i class="fas fa-paper-plane"></i>
+          </button>
+        </div>
+      </div>
     </div>`
   }).join('')
 
-  // Clear results
-  const container = document.getElementById('results-container')
-  const placeholder = document.getElementById('results-placeholder')
-  if (placeholder) placeholder.remove()
-  container.innerHTML = ''
+  // Delegação para botões rápidos
+  grid.addEventListener('click', function(e) {
+    const qbtn = e.target.closest('.inline-qbtn')
+    if (qbtn) {
+      const id = qbtn.dataset.agentId
+      const q = qbtn.dataset.q
+      const inp = document.getElementById('input-' + id)
+      if (inp) { inp.value = q; inlineSend(id) }
+    }
+  })
+}
+
+// ── Toggle painel inline de chat
+function toggleInlineChat(id) {
+  const panel = document.getElementById('inline-' + id)
+  const btn = document.getElementById('btn-' + id)
+  if (!panel) return
+  const isOpen = panel.classList.contains('open')
+
+  // Fechar outros abertos na mesma grid
+  document.querySelectorAll('.inline-chat.open').forEach(el => {
+    el.classList.remove('open')
+    const otherId = el.id.replace('inline-', '')
+    const otherBtn = document.getElementById('btn-' + otherId)
+    if (otherBtn) otherBtn.classList.remove('active')
+  })
+
+  if (!isOpen) {
+    panel.classList.add('open')
+    if (btn) btn.classList.add('active')
+    // Inicializar sessão se ainda não existe
+    if (!_inlineSessions[id]) _inlineSessions[id] = { history: [], streaming: false }
+    setTimeout(() => {
+      const inp = document.getElementById('input-' + id)
+      if (inp) inp.focus()
+      panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    }, 60)
+  }
+}
+
+// ── Enviar mensagem no chat inline
+async function inlineSend(id) {
+  const session = _inlineSessions[id] || (_inlineSessions[id] = { history: [], streaming: false })
+  if (session.streaming) return
+
+  const input = document.getElementById('input-' + id)
+  const msg = input ? input.value.trim() : ''
+  if (!msg) return
+
+  input.value = ''
+  const agent = allAgents.find(a => a.id === id)
+  if (!agent) return
+
+  const msgsEl = document.getElementById('msgs-' + id)
+  const typingEl = document.getElementById('typing-' + id)
+  const sendBtn = document.getElementById('sbtn-' + id)
+
+  // Adicionar mensagem do usuário
+  _inlineAppendMsg(msgsEl, 'user', escHtml(msg), '👤 Você')
+  session.history.push({ role: 'user', content: msg })
+
+  session.streaming = true
+  if (sendBtn) sendBtn.disabled = true
+  if (typingEl) typingEl.style.display = 'block'
+
+  // Criar div da resposta streaming
+  const aiEl = document.createElement('div')
+  aiEl.className = 'inline-msg ai'
+  aiEl.innerHTML = `<div class="mn ai">${agent.emoji} ${agent.name}</div><div class="stream-txt"></div>`
+  msgsEl.appendChild(aiEl)
+  const streamDiv = aiEl.querySelector('.stream-txt')
+  msgsEl.scrollTop = msgsEl.scrollHeight
+
+  let fullText = ''
 
   try {
-    if (mode === 'orchestrate') {
-      document.getElementById('progress-info').textContent = 'Roteamento inteligente...'
-      selectedIds.forEach(id => {
-        const el = document.getElementById('step-' + id)
-        if (el) el.classList.add('done')
+    const sysMsg = { role: 'system', content: agent.system || ('Você é ' + agent.name + '. Responda em português.') }
+    const res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messages: [sysMsg, ...session.history],
+        model: agent.model
       })
-      const res = await fetch('/api/orchestrate', {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({task})
-      })
-      const data = await res.json()
-      data.results.forEach(r => renderResult(r, container))
-    } else {
-      for (let i = 0; i < selectedIds.length; i++) {
-        const id = selectedIds[i]
-        const stepEl = document.getElementById('step-' + id)
-        if (stepEl) {
-          stepEl.style.background = 'rgba(108,99,255,.2)'
-          stepEl.style.borderColor = '#6C63FF'
-          stepEl.innerHTML += ' <i class="fas fa-spinner spin"></i>'
-        }
-        document.getElementById('progress-info').textContent = `${i+1}/${selectedIds.length}`
+    })
 
-        const res = await fetch('/api/agent/' + id, {
-          method: 'POST',
-          headers: {'Content-Type':'application/json'},
-          body: JSON.stringify({task, message: task})
-        })
-        const result = await res.json()
-        renderResult(result, container)
+    if (typingEl) typingEl.style.display = 'none'
 
-        if (stepEl) {
-          stepEl.style.background = 'rgba(52,211,153,.1)'
-          stepEl.style.borderColor = '#34D399'
-          stepEl.classList.remove('pending')
-          stepEl.classList.add('done')
-          const spinner = stepEl.querySelector('.fa-spinner')
-          if (spinner) spinner.remove()
-          stepEl.innerHTML += ' ✓'
+    if (res.body) {
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const parts = buffer.split('\n\n')
+        buffer = parts.pop() || ''
+        for (const part of parts) {
+          for (const line of part.split('\n')) {
+            if (!line.startsWith('data:')) continue
+            const data = line.slice(5).trim()
+            if (data === '[DONE]') continue
+            try {
+              const json = JSON.parse(data)
+              const chunk = json.response || (json.choices?.[0]?.delta?.content) || ''
+              if (chunk) {
+                fullText += chunk
+                streamDiv.innerHTML = mdToHtml(fullText) + '<span style="display:inline-block;width:2px;height:1em;background:var(--secondary);animation:blink .7s infinite;vertical-align:text-bottom;margin-left:2px"></span>'
+                msgsEl.scrollTop = msgsEl.scrollHeight
+              }
+            } catch {}
+          }
         }
       }
+      streamDiv.innerHTML = mdToHtml(fullText)
+    } else {
+      const data = await res.json()
+      fullText = data.response || data.content || 'Sem resposta'
+      streamDiv.innerHTML = mdToHtml(fullText)
     }
-  } catch(e) {
-    container.innerHTML += `<div class="glass rounded-2xl p-5" style="border:1px solid #991b1b">
-      <div style="color:#F87171">❌ Erro: ${e.message}</div></div>`
+  } catch (err) {
+    if (typingEl) typingEl.style.display = 'none'
+    streamDiv.innerHTML = `<span style="color:#F87171">❌ Erro: ${escHtml(err.message)}</span>`
   }
 
-  btn.disabled = false
-  btn.innerHTML = '<i class="fas fa-play mr-2"></i>Executar Pipeline'
+  session.history.push({ role: 'assistant', content: fullText })
+  msgsEl.scrollTop = msgsEl.scrollHeight
+  session.streaming = false
+  if (sendBtn) sendBtn.disabled = false
+  if (input) input.focus()
 }
 
-function renderResult(r, container) {
-  const sourceLabel = r.usedFallback ? '☁️ CF Fallback' : r.source === 'internal' ? '🖥️ Interno' : '☁️ Cloudflare'
-  const sourceBadge = r.usedFallback ? 'badge-hybrid' : r.source === 'internal' ? 'badge-int' : 'badge-cf'
-  const formatted = mdToHtml(r.response || r.error || 'Sem resposta')
-  const modelName = r.model ? r.model.split('/').pop() : ''
-
+function _inlineAppendMsg(msgsEl, role, html, name) {
   const el = document.createElement('div')
-  el.className = 'result-card'
-  el.innerHTML = `
-    <div class="result-header">
-      <span class="result-emoji">${r.emoji}</span>
-      <div style="flex:1">
-        <div class="result-name">${r.name}</div>
-        <div class="result-model">${modelName}</div>
-      </div>
-      <span class="badge ${sourceBadge}">${sourceLabel}</span>
-      <span style="font-size:10px;color:var(--muted)">${(r.duration/1000).toFixed(1)}s</span>
-    </div>
-    <div class="result-body">${formatted}</div>
-  `
-  container.appendChild(el)
-  el.scrollIntoView({behavior:'smooth', block:'nearest'})
+  el.className = 'inline-msg ' + role
+  el.innerHTML = `<div class="mn ${role}">${name}</div><div>${html}</div>`
+  msgsEl.appendChild(el)
+  msgsEl.scrollTop = msgsEl.scrollHeight
 }
 
-// ── Chat
+// ── Filtrar agentes (busca dentro da categoria atual)
+function filterAgents(q) {
+  const base = currentCategory ? allAgents.filter(a => a.category === currentCategory) : allAgents
+  const filtered = q.trim()
+    ? base.filter(a =>
+        a.name.toLowerCase().includes(q.toLowerCase()) ||
+        a.desc.toLowerCase().includes(q.toLowerCase()) ||
+        (a.capabilities || []).some(c => c.toLowerCase().includes(q.toLowerCase()))
+      )
+    : base
+  renderAgentsGrid(filtered)
+}
+
+// ── Aliases para compatibilidade
+function testAgent(id) { toggleInlineChat(id) }
+function openAgentModal(id) { toggleInlineChat(id) }
+
+// ── Chat livre (tab Chat)
 function renderChatModels() {
   const sel = document.getElementById('chat-model')
   if (!sel) return
@@ -374,11 +449,10 @@ function renderChatModels() {
       badge.textContent = found ? found.label : sel.value
     }
   })
-
   const agentSel = document.getElementById('chat-agent')
   if (agentSel) {
     agentSel.innerHTML = '<option value="">Nenhum (chat livre)</option>' +
-      agents.map(a => `<option value="${a.id}">${a.emoji} ${a.name}</option>`).join('')
+      allAgents.map(a => `<option value="${a.id}">${a.emoji} ${a.name}</option>`).join('')
   }
 }
 
@@ -386,35 +460,33 @@ async function sendChat() {
   const input = document.getElementById('chat-input')
   const msg = input.value.trim()
   if (!msg) return
-
   const agentId = document.getElementById('chat-agent').value
   input.value = ''
   input.style.height = 'auto'
 
   if (agentId) {
     appendChatMsg('user', msg)
-    document.getElementById('typing-indicator').style.display=''
+    document.getElementById('typing-indicator').style.display = ''
     try {
       const res = await fetch('/api/agent/' + agentId, {
-        method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({message: msg})
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: msg })
       })
       const data = await res.json()
-      document.getElementById('typing-indicator').style.display='none'
-      const agent = agents.find(a => a.id === agentId)
+      document.getElementById('typing-indicator').style.display = 'none'
+      const agent = allAgents.find(a => a.id === agentId)
       appendChatMsg('assistant', data.response || 'Sem resposta', agent ? agent.name : 'Agente', agent ? agent.emoji : '🤖')
     } catch(e) {
-      document.getElementById('typing-indicator').style.display='none'
+      document.getElementById('typing-indicator').style.display = 'none'
       appendChatMsg('assistant', '❌ Erro: ' + e.message)
     }
     return
   }
 
-  // Chat livre com streaming SSE
   const model = document.getElementById('chat-model').value
-  chatHistory.push({role: 'user', content: msg})
+  chatHistory.push({ role: 'user', content: msg })
   appendChatMsg('user', msg)
-  document.getElementById('typing-indicator').style.display=''
+  document.getElementById('typing-indicator').style.display = ''
   document.getElementById('chat-send-btn').disabled = true
 
   const chatMsgs = document.getElementById('chat-messages')
@@ -428,18 +500,17 @@ async function sendChat() {
   let fullText = ''
   try {
     const res = await fetch('/api/chat', {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({messages: [...chatHistory], model})
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: [...chatHistory], model })
     })
     if (!res.body) throw new Error('Stream não disponível')
     const reader = res.body.getReader()
     const decoder = new TextDecoder()
     let buffer = ''
-
     while (true) {
-      const {done, value} = await reader.read()
+      const { done, value } = await reader.read()
       if (done) break
-      buffer += decoder.decode(value, {stream: true})
+      buffer += decoder.decode(value, { stream: true })
       const parts = buffer.split('\n\n')
       buffer = parts.pop() || ''
       for (const part of parts) {
@@ -449,30 +520,29 @@ async function sendChat() {
           if (data === '[DONE]') continue
           try {
             const json = JSON.parse(data)
-            const chunk = json.response || (json.choices && json.choices[0] && json.choices[0].delta && json.choices[0].delta.content) || ''
+            const chunk = json.response || (json.choices?.[0]?.delta?.content) || ''
             if (chunk) {
               fullText += chunk
-              textEl.innerHTML = mdToHtml(fullText) + '<span class="typing-cursor"></span>'
+              textEl.innerHTML = mdToHtml(fullText) + '<span class="cursor-blink"></span>'
               chatMsgs.scrollTop = 9999
             }
-          } catch(_) {}
+          } catch {}
         }
       }
     }
     textEl.innerHTML = mdToHtml(fullText)
-    chatHistory.push({role: 'assistant', content: fullText})
+    chatHistory.push({ role: 'assistant', content: fullText })
     updateChatHistory()
   } catch(e) {
     textEl.textContent = '❌ Erro: ' + e.message
   }
 
-  document.getElementById('typing-indicator').style.display='none'
+  document.getElementById('typing-indicator').style.display = 'none'
   document.getElementById('chat-send-btn').disabled = false
 }
 
 function appendChatMsg(role, text, name, emoji) {
-  name = name || 'Assistente'
-  emoji = emoji || '🤖'
+  name = name || 'Assistente'; emoji = emoji || '🤖'
   const chatMsgs = document.getElementById('chat-messages')
   const el = document.createElement('div')
   el.className = role === 'user' ? 'msg msg-user' : 'msg msg-ai'
@@ -491,7 +561,7 @@ function updateChatHistory() {
   const userMsgs = chatHistory.filter(m => m.role === 'user')
   if (!userMsgs.length) return
   list.innerHTML = userMsgs.slice(-5).reverse().map(m =>
-    `<div class="px-2 py-1.5 rounded-lg hover:bg-white/5 cursor-pointer truncate">${m.content.slice(0,35)}...</div>`
+    `<div style="padding:4px 6px;border-radius:6px;hover:background:var(--border);cursor:pointer;font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.content.slice(0, 35)}…</div>`
   ).join('')
 }
 
@@ -504,224 +574,8 @@ function clearChat() {
       <div>Olá! Como posso ajudar?</div>
     </div>`
   const list = document.getElementById('chat-history-list')
-  if (list) list.innerHTML = '<div class="text-center py-4">Nenhuma conversa</div>'
+  if (list) list.innerHTML = '<div style="text-align:center;padding:12px 0;font-size:11px;color:var(--muted)">Nenhuma conversa</div>'
 }
-
-// ── Agents Grid
-function renderAgentsGrid(list) {
-  if (!list) list = allAgents
-  const grid = document.getElementById('agents-grid')
-  if (!grid) return
-  if (list.length === 0) {
-    grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--muted)">Nenhum agente encontrado</div>'
-    return
-  }
-  grid.innerHTML = list.map(a => `
-    <div class="agent-card" data-id="${a.id}">
-      <div class="agent-card-hdr">
-        <div class="agent-icon" style="background:${a.color}33">${a.emoji}</div>
-        <div>
-          <div class="agent-card-name">${a.name}</div>
-          <div class="agent-card-model">${a.category}</div>
-        </div>
-        <span class="badge ${a.source === 'hybrid' ? 'badge-hybrid' : 'badge-cf'}" style="margin-left:auto">${a.source}</span>
-      </div>
-      <div class="agent-card-desc">${a.desc}</div>
-      <div class="caps">${(a.capabilities || []).map(c => `<span class="cap-pill">${c}</span>`).join('')}</div>
-      ${a.basedOn ? `<div style="font-size:10px;color:#6B7280;margin-top:8px">📦 <span style="color:#a5b4fc">${a.basedOn}</span></div>` : ''}
-      <div style="font-size:10px;color:#6B7280;margin-top:4px">🤖 <span style="color:#22D3EE">${a.model ? a.model.split('/').pop() : ''}</span></div>
-      <button onclick="testAgent('${a.id}')" class="btn" style="width:100%;margin-top:10px;padding:7px;font-size:11px;background:rgba(108,99,255,.18);border:1px solid rgba(108,99,255,.35);color:#a5b4fc">
-        <i class="fas fa-flask"></i> Testar Agente
-      </button>
-    </div>
-  `).join('')
-}
-
-function filterAgents(q) {
-  const base = currentCategory ? allAgents.filter(a => a.category === currentCategory) : allAgents
-  const filtered = q.trim()
-    ? base.filter(a =>
-        a.name.toLowerCase().includes(q.toLowerCase()) ||
-        a.desc.toLowerCase().includes(q.toLowerCase()) ||
-        (a.capabilities || []).some(c => c.toLowerCase().includes(q.toLowerCase()))
-      )
-    : base
-  renderAgentsGrid(filtered)
-}
-
-// ── Modal de Agente ───────────────────────────────────────────
-let _modalAgent = null
-let _modalHistory = []
-
-// Perguntas rápidas por categoria
-const QUICK_QUESTIONS = {
-  'Financeiro':     ['Faça um DRE simples','Analise fluxo de caixa','Monte um budget mensal'],
-  'Crédito':        ['Analise este perfil de crédito','Crie régua de cobrança','Calcule score de risco'],
-  'Jurídico':       ['Revise este contrato','Explique a LGPD','Crie NDA simples'],
-  'Marketing':      ['Crie post para Instagram','Escreva e-mail marketing','Gere 5 ideias de conteúdo'],
-  'Comercial':      ['Crie script de vendas','Responda objeção de preço','Monte proposta comercial'],
-  'Tecnologia':     ['Crie uma API REST','Revise este código','Explique microserviços'],
-  'RH':             ['Crie job description','Monte roteiro de entrevista','Elabore PDI'],
-  'Administrativo': ['Escreva e-mail formal','Crie ata de reunião','Monte agenda executiva'],
-  'Orquestração':   ['Analise esta tarefa','Faça análise SWOT','Revise esta entrega'],
-  'Diretoria':      ['Monte estratégia de negócio','Analise M&A','Crie plano de 90 dias'],
-  'Criativo':       ['Crie um slogan','Escreva roteiro de vídeo','Gere copy persuasivo'],
-}
-
-function openAgentModal(id) {
-  const agent = allAgents.find(a => a.id === id)
-  if (!agent) return
-
-  _modalAgent = agent
-  _modalHistory = []
-
-  // Preencher header
-  const iconEl = document.getElementById('modal-icon')
-  iconEl.textContent = agent.emoji
-  iconEl.style.background = agent.color + '33'
-  document.getElementById('modal-name').textContent = agent.name
-  document.getElementById('modal-sub').textContent = agent.category + ' · ' + (agent.model || '').split('/').pop()
-
-  // Capabilities
-  document.getElementById('modal-caps').innerHTML =
-    (agent.capabilities || []).map(c => `<span class="cap-pill">${c}</span>`).join('')
-
-  // Perguntas rápidas
-  const qcat = QUICK_QUESTIONS[agent.category] || QUICK_QUESTIONS['Orquestração']
-  document.getElementById('modal-quick').innerHTML =
-    qcat.map(q => `<button class="qbtn" onclick="modalQuick(this)">${q}</button>`).join('')
-
-  // Mensagem de boas-vindas
-  const msgs = document.getElementById('modal-msgs')
-  msgs.innerHTML = ''
-  _modalAppendMsg('ai', `Olá! Sou o <strong>${agent.name}</strong>. ${agent.desc}<br><br>Como posso ajudar você hoje?`, agent.emoji + ' ' + agent.name)
-
-  // Limpar input
-  document.getElementById('modal-input').value = ''
-  document.getElementById('modal-send-btn').disabled = false
-  document.getElementById('modal-typing').style.display = 'none'
-
-  // Abrir modal
-  document.getElementById('agent-modal').classList.add('open')
-  setTimeout(() => document.getElementById('modal-input').focus(), 80)
-}
-
-// Alias para compatibilidade com o botão "Testar Agente"
-function testAgent(id) { openAgentModal(id) }
-
-function closeAgentModal() {
-  document.getElementById('agent-modal').classList.remove('open')
-  _modalAgent = null
-  _modalHistory = []
-}
-
-function _modalBgClick(e) {
-  if (e.target.id === 'agent-modal') closeAgentModal()
-}
-
-function modalQuick(btn) {
-  document.getElementById('modal-input').value = btn.textContent
-  modalSend()
-}
-
-function _modalAppendMsg(role, html, name) {
-  const msgs = document.getElementById('modal-msgs')
-  const el = document.createElement('div')
-  el.className = 'modal-msg ' + role
-  el.innerHTML = `<div class="mn ${role}">${name || (role === 'ai' ? '🤖 Agente' : '👤 Você')}</div><div>${html}</div>`
-  msgs.appendChild(el)
-  msgs.scrollTop = msgs.scrollHeight
-}
-
-async function modalSend() {
-  if (!_modalAgent) return
-  const input = document.getElementById('modal-input')
-  const msg = input.value.trim()
-  if (!msg) return
-
-  input.value = ''
-  document.getElementById('modal-send-btn').disabled = true
-  _modalAppendMsg('user', escHtml(msg), '👤 Você')
-  _modalHistory.push({ role: 'user', content: msg })
-
-  const typing = document.getElementById('modal-typing')
-  typing.style.display = 'block'
-
-  // Criar div de resposta com cursor piscando (streaming)
-  const msgs = document.getElementById('modal-msgs')
-  const aiEl = document.createElement('div')
-  aiEl.className = 'modal-msg ai'
-  aiEl.innerHTML = `<div class="mn ai">${_modalAgent.emoji} ${_modalAgent.name}</div><div class="modal-streaming"></div>`
-  msgs.appendChild(aiEl)
-  const streamDiv = aiEl.querySelector('.modal-streaming')
-  msgs.scrollTop = msgs.scrollHeight
-
-  let fullText = ''
-
-  try {
-    // Tentar SSE streaming via /api/chat com system do agente
-    const sysMsg = { role: 'system', content: _modalAgent.system || ('Você é ' + _modalAgent.name + '. Responda em português.') }
-    const res = await fetch('/api/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        messages: [sysMsg, ..._modalHistory],
-        model: _modalAgent.model
-      })
-    })
-
-    if (res.body) {
-      typing.style.display = 'none'
-      const reader = res.body.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ''
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        buffer += decoder.decode(value, { stream: true })
-        const parts = buffer.split('\n\n')
-        buffer = parts.pop() || ''
-        for (const part of parts) {
-          for (const line of part.split('\n')) {
-            if (!line.startsWith('data:')) continue
-            const data = line.slice(5).trim()
-            if (data === '[DONE]') continue
-            try {
-              const json = JSON.parse(data)
-              const chunk = json.response ||
-                (json.choices?.[0]?.delta?.content) || ''
-              if (chunk) {
-                fullText += chunk
-                streamDiv.innerHTML = mdToHtml(fullText) + '<span class="cursor-blink"></span>'
-                msgs.scrollTop = msgs.scrollHeight
-              }
-            } catch {}
-          }
-        }
-      }
-      streamDiv.innerHTML = mdToHtml(fullText)
-    } else {
-      // Fallback não-streaming
-      const data = await res.json()
-      fullText = data.response || data.content || 'Sem resposta'
-      typing.style.display = 'none'
-      streamDiv.innerHTML = mdToHtml(fullText)
-    }
-  } catch (err) {
-    typing.style.display = 'none'
-    streamDiv.innerHTML = `<span style="color:#F87171">❌ Erro: ${escHtml(err.message)}</span>`
-  }
-
-  _modalHistory.push({ role: 'assistant', content: fullText })
-  msgs.scrollTop = msgs.scrollHeight
-  document.getElementById('modal-send-btn').disabled = false
-  document.getElementById('modal-input').focus()
-}
-
-// Fechar modal com Escape
-document.addEventListener('keydown', function(e) {
-  if (e.key === 'Escape') closeAgentModal()
-})
 
 // ── Status
 async function loadStatus() {
@@ -732,106 +586,72 @@ async function loadStatus() {
     if (!container) return
 
     const reposHtml = Object.entries(data.repos || {}).map(([name, info]) => `
-      <div class="flex items-start gap-3 p-3 rounded-xl" style="background:var(--bg);border:1px solid var(--border)">
-        <span style="color:#34D399;margin-top:2px">●</span>
+      <div style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-radius:10px;background:var(--bg);border:1px solid var(--border)">
+        <span style="color:#34D399;margin-top:2px;font-size:8px">●</span>
         <div>
-          <div class="font-medium text-white text-sm">${name}</div>
-          <div class="text-xs mt-1" style="color:#6B7280">${info.type || ''}</div>
-          ${info.url ? `<a href="${info.url}" target="_blank" class="text-xs" style="color:#6C63FF">${info.url}</a>` : ''}
-          ${info.note ? `<div class="text-xs mt-1" style="color:#F59E0B">${info.note}</div>` : ''}
+          <div style="font-size:13px;font-weight:500;color:#fff">${name}</div>
+          <div style="font-size:11px;margin-top:2px;color:#6B7280">${info.type || ''}</div>
+          ${info.url ? `<a href="${info.url}" target="_blank" style="font-size:11px;color:#6C63FF">${info.url}</a>` : ''}
+          ${info.note ? `<div style="font-size:11px;margin-top:2px;color:#F59E0B">${info.note}</div>` : ''}
         </div>
       </div>
     `).join('')
 
     const featuresHtml = (data.features || []).map(f => `
-      <div class="flex items-center gap-3 p-2.5 rounded-xl" style="background:var(--bg)">
-        <i class="fas fa-check-circle" style="color:#34D399"></i>
-        <span class="text-sm text-white">${f}</span>
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;background:var(--bg)">
+        <i class="fas fa-check-circle" style="color:#34D399;font-size:12px"></i>
+        <span style="font-size:13px;color:#fff">${f}</span>
       </div>
     `).join('')
 
     container.innerHTML = `
-      <div class="glass rounded-2xl p-5">
-        <h3 class="font-semibold text-white mb-4">
-          <i class="fas fa-code-branch mr-2" style="color:var(--primary)"></i>Repositórios Integrados
-        </h3>
-        <div class="space-y-3">${reposHtml}</div>
+      <div class="card">
+        <div class="card-title"><i class="fas fa-code-branch" style="color:var(--primary)"></i>Repositórios</div>
+        <div style="display:flex;flex-direction:column;gap:8px">${reposHtml}</div>
       </div>
-      <div class="glass rounded-2xl p-5">
-        <h3 class="font-semibold text-white mb-4">
-          <i class="fas fa-server mr-2" style="color:var(--secondary)"></i>Funcionalidades
-        </h3>
-        <div class="space-y-2">${featuresHtml}</div>
-        <div class="mt-4 p-3 rounded-xl text-xs" style="background:rgba(108,99,255,.1);border:1px solid rgba(108,99,255,.3);color:#a5b4fc">
-          <i class="fas fa-info-circle mr-2"></i>
-          Plataforma no Cloudflare Pages Edge — latência global &lt; 50ms
+      <div class="card">
+        <div class="card-title"><i class="fas fa-server" style="color:var(--secondary)"></i>Funcionalidades</div>
+        <div style="display:flex;flex-direction:column;gap:6px">${featuresHtml}</div>
+        <div style="margin-top:12px;padding:10px 12px;border-radius:8px;font-size:11px;background:rgba(108,99,255,.1);border:1px solid rgba(108,99,255,.3);color:#a5b4fc">
+          <i class="fas fa-info-circle" style="margin-right:6px"></i>Cloudflare Pages Edge — latência global &lt; 50ms
         </div>
-      </div>
-    `
+      </div>`
 
     const statAgents = document.getElementById('stat-agents')
     const statModels = document.getElementById('stat-models')
     if (statAgents) statAgents.textContent = data.agents
     if (statModels) statModels.textContent = data.models
-
     document.getElementById('status-text').textContent = 'Online v' + data.version
   } catch(e) {
-    const statusText = document.getElementById('status-text')
-    if (statusText) statusText.textContent = 'Verificando...'
+    const el = document.getElementById('status-text')
+    if (el) el.textContent = 'Verificando...'
   }
-}
-
-// ── Clear All
-function clearAll() {
-  document.getElementById('pipeline-task').value = ''
-  document.querySelectorAll('.agent-checkbox').forEach(cb => cb.checked = false)
-  updateAgentCount()
-  document.getElementById('results-container').innerHTML = `
-    <div id="results-placeholder" class="glass rounded-2xl p-12 text-center">
-      <div class="text-5xl mb-4">🤖</div>
-      <div class="text-white font-medium mb-2">Pronto para executar</div>
-      <div class="text-sm" style="color:var(--muted)">Configure a tarefa, selecione os agentes e clique em Executar</div>
-    </div>`
-  document.getElementById('progress-bar').style.display='none'
 }
 
 // ── Utils
 function escHtml(t) {
   if (!t) return ''
   return String(t)
-    .replace(/&/g,'&amp;')
-    .replace(/</g,'&lt;')
-    .replace(/>/g,'&gt;')
-    .replace(/"/g,'&quot;')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
 function mdToHtml(md) {
   if (!md) return ''
   let s = String(md)
-  // escape HTML first
   s = s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-  // code blocks
   s = s.replace(/```(\w*)?\n?([\s\S]*?)```/g, function(_, lang, code) {
-    return '<pre style="background:#0d0d1a;border:1px solid #2A2D40;border-radius:8px;padding:12px;overflow-x:auto;margin:8px 0"><code style="color:#e2e8f0;font-family:monospace;font-size:13px">' + code.trim() + '</code></pre>'
+    return '<pre style="background:#0d0d1a;border:1px solid #2A2D40;border-radius:8px;padding:10px;overflow-x:auto;margin:6px 0"><code style="color:#e2e8f0;font-family:monospace;font-size:12px">' + code.trim() + '</code></pre>'
   })
-  // inline code
-  s = s.replace(/`([^`]+)`/g, '<code style="background:#1e2030;padding:2px 6px;border-radius:4px;color:#f472b6;font-family:monospace">$1</code>')
-  // bold
+  s = s.replace(/`([^`]+)`/g, '<code style="background:#1e2030;padding:1px 5px;border-radius:4px;color:#f472b6;font-family:monospace">$1</code>')
   s = s.replace(/\*\*([^*]+)\*\*/g, '<strong style="color:white">$1</strong>')
-  // italic
   s = s.replace(/\*([^*\n]+)\*/g, '<em>$1</em>')
-  // h3
-  s = s.replace(/^### (.+)$/gm, '<h3 style="color:#22D3EE;font-size:1rem;font-weight:600;margin:12px 0 6px">$1</h3>')
-  // h2
-  s = s.replace(/^## (.+)$/gm, '<h2 style="color:#a5b4fc;font-size:1.1rem;font-weight:700;margin:16px 0 8px">$1</h2>')
-  // h1
-  s = s.replace(/^# (.+)$/gm, '<h1 style="color:white;font-size:1.25rem;font-weight:800;margin:16px 0 8px">$1</h1>')
-  // lists
-  s = s.replace(/^[-*] (.+)$/gm, '<li style="margin:3px 0;padding-left:4px">• $1</li>')
-  s = s.replace(/^(\d+)\. (.+)$/gm, '<li style="margin:3px 0;padding-left:4px">$1. $2</li>')
-  // blockquote
-  s = s.replace(/^> (.+)$/gm, '<blockquote style="border-left:3px solid #6C63FF;padding-left:12px;color:#9CA3AF;margin:8px 0">$1</blockquote>')
-  // newlines
+  s = s.replace(/^### (.+)$/gm, '<h3 style="color:#22D3EE;font-size:.9rem;font-weight:600;margin:10px 0 4px">$1</h3>')
+  s = s.replace(/^## (.+)$/gm, '<h2 style="color:#a5b4fc;font-size:1rem;font-weight:700;margin:12px 0 6px">$1</h2>')
+  s = s.replace(/^# (.+)$/gm, '<h1 style="color:white;font-size:1.1rem;font-weight:800;margin:12px 0 6px">$1</h1>')
+  s = s.replace(/^[-*] (.+)$/gm, '<li style="margin:2px 0;padding-left:4px">• $1</li>')
+  s = s.replace(/^(\d+)\. (.+)$/gm, '<li style="margin:2px 0;padding-left:4px">$1. $2</li>')
+  s = s.replace(/^> (.+)$/gm, '<blockquote style="border-left:3px solid #6C63FF;padding-left:10px;color:#9CA3AF;margin:6px 0">$1</blockquote>')
   s = s.replace(/\n/g, '<br>')
   return s
 }

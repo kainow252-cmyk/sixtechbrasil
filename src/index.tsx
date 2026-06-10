@@ -816,7 +816,7 @@ app.get('/', (c) => {
   --primary:#6C63FF;--secondary:#22D3EE;--accent:#EC4899;
   --bg:#0B0D17;--surface:#111320;--card:#1B1E2E;
   --border:#2A2D40;--text:#E8E9F3;--muted:#6B7280;
-  --sidebar-w:240px;--header-h:54px;
+  --sidebar-w:220px;--header-h:54px;
 }
 html,body{height:100%;overflow:hidden}
 body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-serif;display:flex;flex-direction:column}
@@ -890,10 +890,7 @@ main{flex:1;overflow-y:auto;display:flex;flex-direction:column}
 .card-title i{font-size:12px}
 
 /* ── Grid helpers ─────────────────────────────────────────── */
-.grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
-.grid-2{display:grid;grid-template-columns:1fr 2fr;gap:14px}
 .grid-chat{display:grid;grid-template-columns:220px 1fr;gap:14px}
-.col-span-2{grid-column:span 2}
 .col-left{display:flex;flex-direction:column;gap:12px}
 
 /* ── Form elements ────────────────────────────────────────── */
@@ -920,34 +917,6 @@ select option{background:var(--card)}
 .badge-hybrid{background:#1e2d1e;color:#34D399}
 .badge-int{background:#2d1e1e;color:#F87171}
 
-/* ── Pipeline ─────────────────────────────────────────────── */
-.agent-check-item{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;cursor:pointer;transition:background .12s}
-.agent-check-item:hover{background:rgba(255,255,255,.04)}
-.agent-check-item input{accent-color:var(--primary);flex-shrink:0}
-.checklist-scroll{max-height:220px;overflow-y:auto;display:flex;flex-direction:column;gap:2px}
-.mode-label{display:flex;align-items:flex-start;gap:10px;cursor:pointer;padding:6px 0}
-.mode-label input{margin-top:3px;accent-color:var(--primary)}
-.mode-title{font-size:13px;font-weight:500;color:#fff}
-.mode-sub{font-size:11px;color:var(--muted)}
-#progress-bar{display:none}
-.progress-steps{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
-.progress-step{padding:4px 10px;border-radius:6px;font-size:11px;background:var(--surface);border:1px solid var(--border);color:var(--muted);transition:all .3s}
-.progress-step.done{background:rgba(52,211,153,.1);border-color:#34D399;color:#34D399}
-.progress-step.active-step{background:rgba(108,99,255,.15);border-color:var(--primary);color:#fff}
-#results-container{display:flex;flex-direction:column;gap:12px}
-.result-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;animation:slideIn .28s ease}
-@keyframes slideIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
-.result-header{display:flex;align-items:center;gap:8px;margin-bottom:10px}
-.result-emoji{font-size:20px}
-.result-name{font-size:13px;font-weight:600;color:#fff}
-.result-model{font-size:10px;color:var(--muted)}
-.result-body{font-size:13px;color:var(--text);line-height:1.6}
-.result-footer{display:flex;align-items:center;gap:10px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);font-size:11px;color:var(--muted)}
-#results-placeholder{text-align:center;padding:60px 20px}
-#results-placeholder .ph-emoji{font-size:48px;margin-bottom:12px}
-#results-placeholder .ph-title{font-size:14px;font-weight:600;color:#fff;margin-bottom:6px}
-#results-placeholder .ph-sub{font-size:12px;color:var(--muted)}
-
 /* ── Chat ─────────────────────────────────────────────────── */
 .chat-box{display:flex;flex-direction:column;height:calc(100vh - var(--header-h) - 60px);background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden}
 .chat-hdr{padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
@@ -965,18 +934,6 @@ select option{background:var(--card)}
 .cursor-blink{display:inline-block;width:2px;height:1em;background:var(--secondary);animation:blink .7s infinite;vertical-align:text-bottom;margin-left:2px}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
 
-/* ── Agents grid ──────────────────────────────────────────── */
-.agents-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
-.agent-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;transition:transform .18s,box-shadow .18s;cursor:default}
-.agent-card:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(108,99,255,.18)}
-.agent-card-hdr{display:flex;align-items:center;gap:10px;margin-bottom:10px}
-.agent-icon{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
-.agent-card-name{font-size:13px;font-weight:600;color:#fff}
-.agent-card-model{font-size:10px;color:var(--muted);margin-top:1px}
-.agent-card-desc{font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:10px}
-.caps{display:flex;flex-wrap:wrap;gap:4px}
-.cap-pill{font-size:10px;padding:2px 7px;border-radius:999px;background:rgba(108,99,255,.12);color:#a5b4fc;border:1px solid rgba(108,99,255,.25)}
-
 /* ── Stats ────────────────────────────────────────────────── */
 .stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
 .stat-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px}
@@ -984,18 +941,10 @@ select option{background:var(--card)}
 .stat-label{font-size:11px;color:var(--muted);margin-top:5px}
 .gtext{background:linear-gradient(135deg,var(--primary),var(--secondary));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
 
-/* ── Filters ──────────────────────────────────────────────── */
-.filter-bar{display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap}
-.filter-btn{padding:5px 12px;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;border:none;background:var(--card);color:var(--muted);transition:all .15s}
-.filter-btn.active{background:var(--primary);color:#fff}
-.filter-btn:hover:not(.active){background:var(--border);color:var(--text)}
-
 /* ── Responsive ───────────────────────────────────────────── */
 @media(max-width:860px){
-  .grid-2,.grid-chat{grid-template-columns:1fr}
+  .grid-chat{grid-template-columns:1fr}
   .stats-grid{grid-template-columns:1fr 1fr}
-  .grid-3{grid-template-columns:1fr}
-  .col-span-2{grid-column:span 1}
 }
 @media(max-width:540px){
   .stats-grid{grid-template-columns:1fr}
@@ -1007,71 +956,119 @@ select option{background:var(--card)}
 .spin{animation:spin 1s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 
-/* ── Modal Agente ─────────────────────────────────────────── */
-.modal-backdrop{
-  display:none;position:fixed;inset:0;z-index:500;
-  background:rgba(0,0,0,.72);backdrop-filter:blur(4px);
-  align-items:center;justify-content:center;
-}
-.modal-backdrop.open{display:flex}
-.modal-box{
-  width:min(680px,96vw);max-height:90vh;
-  background:var(--surface);border:1px solid var(--border);
-  border-radius:18px;display:flex;flex-direction:column;
-  overflow:hidden;animation:modalIn .22s ease;
-}
-@keyframes modalIn{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
-.modal-hdr{
+/* ── Agents Screen ────────────────────────────────────────── */
+.agents-screen-hdr{
   display:flex;align-items:center;gap:12px;
-  padding:16px 20px;border-bottom:1px solid var(--border);
-  flex-shrink:0;
+  padding:0 0 16px 0;border-bottom:1px solid var(--border);margin-bottom:18px;
 }
-.modal-agent-icon{width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0}
-.modal-agent-name{font-size:16px;font-weight:700;color:#fff}
-.modal-agent-sub{font-size:11px;color:var(--muted);margin-top:2px}
-.modal-close{
-  margin-left:auto;background:none;border:none;color:var(--muted);
-  font-size:20px;cursor:pointer;padding:4px 8px;border-radius:6px;
-  line-height:1;transition:color .15s;
+.agents-screen-icon{
+  width:44px;height:44px;border-radius:12px;
+  display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;
 }
-.modal-close:hover{color:#fff}
-.modal-caps{display:flex;flex-wrap:wrap;gap:4px;padding:10px 20px;border-bottom:1px solid var(--border);flex-shrink:0}
-.modal-msgs{
-  flex:1;overflow-y:auto;
-  padding:16px 20px;display:flex;flex-direction:column;gap:10px;
-  min-height:200px;max-height:420px;
+.agents-screen-title{font-size:18px;font-weight:800;color:#fff}
+.agents-screen-sub{font-size:12px;color:var(--muted);margin-top:2px}
+.agents-back-btn{
+  display:flex;align-items:center;gap:6px;padding:6px 12px;
+  border-radius:8px;background:var(--card);border:1px solid var(--border);
+  color:var(--muted);font-size:12px;cursor:pointer;transition:all .15s;
+  margin-left:auto;
 }
-.modal-msg{border-radius:10px;padding:10px 14px;font-size:13px;line-height:1.6}
-.modal-msg.ai{background:var(--card);border-left:3px solid var(--secondary)}
-.modal-msg.user{background:rgba(108,99,255,.12);border-left:3px solid var(--primary)}
-.modal-msg .mn{font-size:11px;font-weight:600;margin-bottom:4px}
-.modal-msg .mn.ai{color:var(--secondary)}
-.modal-msg .mn.user{color:var(--primary)}
-.modal-typing{display:none;padding:4px 20px;font-size:11px;color:var(--muted);flex-shrink:0}
-.modal-input-row{
-  display:flex;gap:8px;padding:12px 20px;
+.agents-back-btn:hover{color:#fff;background:var(--border)}
+.search-box{
+  display:flex;align-items:center;gap:8px;
+  background:var(--card);border:1px solid var(--border);border-radius:10px;
+  padding:6px 12px;
+}
+.search-box input{background:none;border:none;color:var(--text);font-size:13px;outline:none;width:180px}
+.search-box i{color:var(--muted);font-size:12px}
+
+/* ── Agents Grid (nova versão) ────────────────────────────── */
+.agents-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
+.agent-card{
+  background:var(--card);border:1px solid var(--border);
+  border-radius:14px;overflow:hidden;
+  transition:box-shadow .18s;
+}
+.agent-card:hover{box-shadow:0 6px 24px rgba(108,99,255,.18)}
+.agent-card-top{
+  padding:16px;cursor:pointer;
+  display:flex;flex-direction:column;gap:10px;
+}
+.agent-card-hdr{display:flex;align-items:flex-start;gap:10px}
+.agent-icon{width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+.agent-card-name{font-size:14px;font-weight:700;color:#fff;line-height:1.2}
+.agent-card-cat{font-size:10px;color:var(--muted);margin-top:2px}
+.agent-card-desc{font-size:12px;color:var(--muted);line-height:1.55}
+.caps{display:flex;flex-wrap:wrap;gap:4px}
+.cap-pill{font-size:10px;padding:2px 7px;border-radius:999px;background:rgba(108,99,255,.12);color:#a5b4fc;border:1px solid rgba(108,99,255,.25)}
+.agent-card-btn{
+  display:flex;align-items:center;justify-content:center;gap:7px;
+  padding:9px 0;margin:0 16px 14px;
+  border-radius:10px;font-size:12px;font-weight:600;cursor:pointer;
+  background:rgba(108,99,255,.15);border:1px solid rgba(108,99,255,.3);
+  color:#a5b4fc;transition:all .15s;
+}
+.agent-card-btn:hover{background:rgba(108,99,255,.28);color:#fff;border-color:var(--primary)}
+.agent-card-btn.active{background:linear-gradient(135deg,var(--primary),#4f46e5);color:#fff;border-color:transparent}
+
+/* ── Inline Chat Panel ────────────────────────────────────── */
+.inline-chat{
+  display:none;border-top:1px solid var(--border);
+  background:var(--surface);flex-direction:column;
+  max-height:420px;
+}
+.inline-chat.open{display:flex}
+.inline-chat-hdr{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:10px 16px;border-bottom:1px solid var(--border);flex-shrink:0;
+  font-size:12px;font-weight:600;color:var(--secondary);
+}
+.inline-chat-hdr button{background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;padding:2px 6px;border-radius:4px}
+.inline-chat-hdr button:hover{color:#fff;background:var(--border)}
+.inline-msgs{
+  flex:1;overflow-y:auto;padding:12px 16px;
+  display:flex;flex-direction:column;gap:8px;min-height:100px;
+}
+.inline-msg{border-radius:8px;padding:8px 12px;font-size:12px;line-height:1.55}
+.inline-msg.ai{background:var(--card);border-left:3px solid var(--secondary)}
+.inline-msg.user{background:rgba(108,99,255,.1);border-left:3px solid var(--primary)}
+.inline-msg .mn{font-size:10px;font-weight:700;margin-bottom:3px}
+.inline-msg .mn.ai{color:var(--secondary)}
+.inline-msg .mn.user{color:var(--primary)}
+.inline-typing{display:none;padding:3px 16px;font-size:10px;color:var(--muted);flex-shrink:0}
+.inline-quick{display:flex;gap:5px;padding:0 16px 8px;flex-wrap:wrap;flex-shrink:0}
+.inline-qbtn{font-size:10px;padding:3px 9px;border-radius:6px;background:var(--card);border:1px solid var(--border);color:var(--muted);cursor:pointer;transition:all .15s}
+.inline-qbtn:hover{background:rgba(108,99,255,.15);color:#fff;border-color:var(--primary)}
+.inline-input-row{
+  display:flex;gap:8px;padding:10px 16px;
   border-top:1px solid var(--border);flex-shrink:0;
 }
-.modal-input-row textarea{
-  flex:1;height:52px;resize:none;font-size:13px;
-}
-.modal-send{
-  height:52px;padding:0 18px;border-radius:10px;
+.inline-input-row textarea{flex:1;height:42px;resize:none;font-size:12px;border-radius:8px;padding:8px 10px}
+.inline-send-btn{
+  height:42px;width:42px;flex-shrink:0;border-radius:8px;
   background:linear-gradient(135deg,var(--primary),#4f46e5);
   color:#fff;border:none;cursor:pointer;font-size:14px;
   transition:opacity .15s;
 }
-.modal-send:hover{opacity:.85}
-.modal-send:disabled{opacity:.4;cursor:not-allowed}
-.modal-quick{
-  display:flex;gap:6px;padding:0 20px 10px;flex-wrap:wrap;flex-shrink:0;
+.inline-send-btn:hover{opacity:.85}
+.inline-send-btn:disabled{opacity:.4;cursor:not-allowed}
+
+/* ── Home Screen (categorias) ─────────────────────────────── */
+.home-hdr{margin-bottom:20px}
+.home-hdr h2{font-size:20px;font-weight:800;color:#fff}
+.home-hdr p{font-size:12px;color:var(--muted);margin-top:4px}
+.cats-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px}
+.cat-card{
+  background:var(--card);border:1px solid var(--border);border-radius:14px;
+  padding:16px;cursor:pointer;transition:all .18s;
+  display:flex;flex-direction:column;align-items:flex-start;gap:8px;
 }
-.qbtn{
-  font-size:11px;padding:4px 10px;border-radius:6px;
-  background:var(--card);border:1px solid var(--border);
-  color:var(--muted);cursor:pointer;transition:all .15s;
-}
-.qbtn:hover{background:rgba(108,99,255,.15);color:#fff;border-color:var(--primary)}
+.cat-card:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(0,0,0,.3);border-color:var(--primary)}
+.cat-card-icon{width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px}
+.cat-card-name{font-size:13px;font-weight:700;color:#fff}
+.cat-card-count{font-size:11px;color:var(--muted)}
+@keyframes slideIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.anim-in{animation:slideIn .22s ease}
 
 /* ── Sidebar Categorias Colapsáveis ───────────────────────── */
 .cat-header{
@@ -1083,46 +1080,10 @@ select option{background:var(--card)}
 }
 .cat-header:hover{background:rgba(108,99,255,.08)}
 .cat-header.open{color:#fff;background:rgba(108,99,255,.1);border-left-color:var(--primary)}
+.cat-header.active-cat{color:#fff;background:rgba(108,99,255,.14);border-left-color:var(--secondary)}
 .cat-header .cat-icon{width:22px;height:22px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0}
 .cat-header .cat-name{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .cat-header .cat-count{font-size:9px;background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:1px 5px;color:var(--muted)}
-.cat-header .cat-arrow{font-size:9px;color:var(--muted);transition:transform .2s;flex-shrink:0}
-.cat-header.open .cat-arrow{transform:rotate(90deg)}
-.cat-agents{
-  overflow:hidden;
-  max-height:0;
-  transition:max-height .28s ease;
-}
-.cat-agents.open{max-height:600px}
-.cat-agent-item{
-  display:flex;align-items:center;gap:7px;
-  padding:7px 14px 7px 28px;
-  cursor:pointer;font-size:12px;color:var(--muted);
-  transition:all .12s;
-  border-left:2px solid transparent;
-  margin-left:3px;
-}
-.cat-agent-item:hover{background:rgba(255,255,255,.04);color:var(--text)}
-.cat-agent-item.active{background:rgba(108,99,255,.1);color:#fff;border-left-color:var(--primary)}
-.cat-agent-item .ag-emoji{font-size:14px;flex-shrink:0;width:18px;text-align:center}
-.cat-agent-item .ag-name{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.cat-agent-item .ag-badge{font-size:9px;padding:1px 5px;border-radius:999px}
-
-/* ── Tab Agentes por Categoria ───────────────────────────── */
-#agents-panel-header{
-  display:flex;align-items:center;gap:10px;margin-bottom:16px;
-}
-.agents-cat-title{
-  font-size:16px;font-weight:700;color:#fff;
-}
-.agents-cat-back{
-  display:flex;align-items:center;gap:6px;
-  padding:5px 10px;border-radius:8px;
-  background:var(--card);border:1px solid var(--border);
-  color:var(--muted);font-size:12px;cursor:pointer;
-  transition:all .15s;
-}
-.agents-cat-back:hover{color:#fff;background:var(--border)}
 </style>
 </head>
 <body>
@@ -1162,8 +1123,8 @@ select option{background:var(--card)}
     <!-- Plataforma -->
     <div class="sidebar-section">
       <div class="sidebar-section-title">Plataforma</div>
-      <div class="nav-item active" onclick="showTab('pipeline',this)">
-        <i class="fas fa-project-diagram"></i> Pipeline
+      <div class="nav-item active" id="nav-home" onclick="showHome(this)">
+        <i class="fas fa-home"></i> Início
       </div>
       <div class="nav-item" onclick="showTab('chat',this)">
         <i class="fas fa-comments"></i> Chat IA
@@ -1172,7 +1133,7 @@ select option{background:var(--card)}
 
     <!-- Categorias de Agentes -->
     <div class="sidebar-section">
-      <div class="sidebar-section-title">Categorias de Agentes</div>
+      <div class="sidebar-section-title">Categorias</div>
       <div id="sidebar-categories"></div>
     </div>
 
@@ -1188,7 +1149,7 @@ select option{background:var(--card)}
     <div class="sidebar-stat">
       <div class="sidebar-stat-title">Dashboard</div>
       <div class="sstat"><span>Agentes</span><span class="sstat-val" id="sb-agents">—</span></div>
-      <div class="sstat"><span>Categorias</span><span class="sstat-val" id="sb-cats">24</span></div>
+      <div class="sstat"><span>Categorias</span><span class="sstat-val">22</span></div>
       <div class="sstat"><span>Uptime</span><span class="sstat-val" style="color:#34D399">99.9%</span></div>
     </div>
   </aside>
@@ -1196,78 +1157,39 @@ select option{background:var(--card)}
   <!-- MAIN -->
   <main>
 
-    <!-- ══ TAB: PIPELINE ══════════════════════════════════════ -->
-    <div id="tab-pipeline" class="tab-panel active">
-      <div class="grid-2">
-
-        <!-- Coluna Esquerda -->
-        <div class="col-left">
-          <div class="card">
-            <div class="card-title"><i class="fas fa-pen-to-square" style="color:var(--primary)"></i> Tarefa</div>
-            <textarea id="pipeline-task" rows="5" placeholder="Descreva o que você precisa...
-
-Ex: Crie uma API REST em Python com FastAPI para gerenciar usuários com autenticação JWT"></textarea>
-            <div style="display:flex;gap:8px;margin-top:10px">
-              <button class="btn btn-primary" style="flex:1" onclick="autoRoute()">
-                <i class="fas fa-wand-magic-sparkles"></i> Auto Roteamento
-              </button>
-              <button class="btn btn-ghost btn-icon" onclick="clearAll()"><i class="fas fa-trash"></i></button>
-            </div>
-          </div>
-
-          <div class="card">
-            <div class="card-title" style="justify-content:space-between">
-              <span><i class="fas fa-robot" style="color:var(--secondary)"></i> Agentes</span>
-              <span id="agent-count" style="font-size:11px;color:var(--muted);font-weight:400">0 selecionados</span>
-            </div>
-            <div id="agent-checklist" class="checklist-scroll"></div>
-            <button class="btn btn-success btn-full" onclick="runPipeline()" id="run-btn">
-              <i class="fas fa-play"></i> Executar Pipeline
-            </button>
-          </div>
-
-          <div class="card">
-            <div class="card-title"><i class="fas fa-sliders" style="color:var(--accent)"></i> Modo</div>
-            <div style="display:flex;flex-direction:column;gap:8px">
-              <label class="mode-label">
-                <input type="radio" name="mode" value="pipeline" checked>
-                <div><div class="mode-title">Pipeline Sequencial</div><div class="mode-sub">Agentes passam contexto entre si</div></div>
-              </label>
-              <label class="mode-label">
-                <input type="radio" name="mode" value="orchestrate">
-                <div><div class="mode-title">Roteamento Inteligente</div><div class="mode-sub">Auto-seleção por análise de contexto</div></div>
-              </label>
-            </div>
-          </div>
-        </div>
-
-        <!-- Coluna Direita -->
-        <div>
-          <div id="progress-bar" class="card" style="margin-bottom:12px">
-            <div style="display:flex;justify-content:space-between;align-items:center">
-              <span style="font-size:13px;font-weight:600;color:#fff"><i class="fas fa-spin fa-circle-notch spin" style="color:var(--primary);margin-right:6px"></i>Executando...</span>
-              <span id="progress-info" style="font-size:11px;color:var(--muted)"></span>
-            </div>
-            <div id="progress-steps" class="progress-steps"></div>
-          </div>
-
-          <div id="results-container">
-            <div id="results-placeholder">
-              <div class="ph-emoji">🤖</div>
-              <div class="ph-title">Pronto para executar</div>
-              <div class="ph-sub">Configure a tarefa, selecione agentes e clique em Executar</div>
-            </div>
-          </div>
-        </div>
-
+    <!-- ══ TELA: HOME (categorias) ══════════════════════════ -->
+    <div id="tab-home" class="tab-panel active">
+      <div class="home-hdr">
+        <h2>Selecione uma Categoria</h2>
+        <p>Escolha um setor para visualizar e conversar com os agentes especializados</p>
       </div>
+      <div id="cats-grid" class="cats-grid"></div>
+    </div>
+
+    <!-- ══ TELA: AGENTES (por categoria) ════════════════════ -->
+    <div id="tab-agents" class="tab-panel">
+      <div class="agents-screen-hdr">
+        <div class="agents-screen-icon" id="agents-screen-icon"></div>
+        <div>
+          <div class="agents-screen-title" id="agents-screen-title">Agentes</div>
+          <div class="agents-screen-sub" id="agents-screen-sub"></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-left:auto">
+          <div class="search-box">
+            <i class="fas fa-search"></i>
+            <input type="text" placeholder="Buscar agente..." id="agent-search" oninput="filterAgents(this.value)">
+          </div>
+          <button class="agents-back-btn" onclick="showHome(null)">
+            <i class="fas fa-arrow-left"></i> Voltar
+          </button>
+        </div>
+      </div>
+      <div id="agents-grid" class="agents-grid"></div>
     </div>
 
     <!-- ══ TAB: CHAT ══════════════════════════════════════════ -->
     <div id="tab-chat" class="tab-panel">
       <div class="grid-chat">
-
-        <!-- Sidebar Chat -->
         <div class="col-left">
           <div class="card">
             <div class="card-title"><i class="fas fa-microchip" style="color:var(--primary)"></i> Modelo</div>
@@ -1285,8 +1207,6 @@ Ex: Crie uma API REST em Python com FastAPI para gerenciar usuários com autenti
             <div id="chat-history-list" style="font-size:11px;color:var(--muted);text-align:center;padding:12px 0">Nenhuma conversa</div>
           </div>
         </div>
-
-        <!-- Chat Box -->
         <div class="chat-box">
           <div class="chat-hdr">
             <div style="display:flex;align-items:center;gap:8px">
@@ -1310,33 +1230,15 @@ Ex: Crie uma API REST em Python com FastAPI para gerenciar usuários com autenti
             </button>
           </div>
         </div>
-
       </div>
-    </div>
-
-    <!-- ══ TAB: AGENTES ════════════════════════════════════════ -->
-    <div id="tab-agents" class="tab-panel">
-      <div id="agents-panel-header">
-        <button class="agents-cat-back" onclick="showAllAgents()">
-          <i class="fas fa-arrow-left"></i> Todas
-        </button>
-        <div>
-          <div class="agents-cat-title" id="agents-cat-title">Todos os Agentes</div>
-          <div style="font-size:11px;color:var(--muted)" id="agents-cat-sub">Selecione uma categoria na sidebar</div>
-        </div>
-        <div style="margin-left:auto">
-          <input type="text" id="agent-search" placeholder="Buscar..." style="width:160px;padding:6px 10px;font-size:12px" oninput="filterAgents(this.value)">
-        </div>
-      </div>
-      <div id="agents-grid" class="agents-grid"></div>
     </div>
 
     <!-- ══ TAB: STATUS ═════════════════════════════════════════ -->
     <div id="tab-status" class="tab-panel">
       <div class="stats-grid">
-        <div class="stat-card"><div class="stat-val gtext" id="stat-agents">9</div><div class="stat-label">Agentes Ativos</div></div>
+        <div class="stat-card"><div class="stat-val gtext" id="stat-agents">—</div><div class="stat-label">Agentes Ativos</div></div>
         <div class="stat-card"><div class="stat-val" style="color:#22D3EE" id="stat-models">8</div><div class="stat-label">Modelos de IA</div></div>
-        <div class="stat-card"><div class="stat-val" style="color:#34D399" id="stat-repos">4</div><div class="stat-label">Repos Integrados</div></div>
+        <div class="stat-card"><div class="stat-val" style="color:#34D399">4</div><div class="stat-label">Repos Integrados</div></div>
         <div class="stat-card"><div class="stat-val" style="color:#F59E0B">v3.0</div><div class="stat-label">Versão</div></div>
       </div>
       <div id="status-details" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px"></div>
@@ -1345,37 +1247,8 @@ Ex: Crie uma API REST em Python com FastAPI para gerenciar usuários com autenti
   </main>
 </div>
 
-<!-- MODAL AGENTE -->
-<div class="modal-backdrop" id="agent-modal" onclick="_modalBgClick(event)">
-  <div class="modal-box">
-    <div class="modal-hdr">
-      <div class="modal-agent-icon" id="modal-icon"></div>
-      <div>
-        <div class="modal-agent-name" id="modal-name"></div>
-        <div class="modal-agent-sub" id="modal-sub"></div>
-      </div>
-      <button class="modal-close" onclick="closeAgentModal()">&#x2715;</button>
-    </div>
-    <div class="modal-caps" id="modal-caps"></div>
-    <div class="modal-msgs" id="modal-msgs"></div>
-    <div class="modal-typing" id="modal-typing">
-      <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--secondary);animation:pulse 1s infinite;margin-right:5px"></span>
-      digitando...
-    </div>
-    <div class="modal-quick" id="modal-quick"></div>
-    <div class="modal-input-row">
-      <textarea id="modal-input" placeholder="Digite sua mensagem... (Enter para enviar)"
-        onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();modalSend()}"></textarea>
-      <button class="modal-send" id="modal-send-btn" onclick="modalSend()">
-        <i class="fas fa-paper-plane"></i>
-      </button>
-    </div>
-  </div>
-</div>
-
 <script src="/static/app.js"></script>
 <script>
-const _v = '3.0'
 function toggleSidebar(){
   const s = document.getElementById('sidebar')
   const o = document.getElementById('sidebar-overlay')
