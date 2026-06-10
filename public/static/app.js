@@ -551,18 +551,179 @@ function filterAgents(q) {
   renderAgentsGrid(filtered)
 }
 
-async function testAgent(id) {
-  const task = prompt('Teste o agente — digite uma tarefa:')
-  if (!task) return
-  // Ir para pipeline e executar
-  document.querySelectorAll('.tab-btn')[0].click()
-  setTimeout(() => {
-    document.getElementById('pipeline-task').value = task
-    document.querySelectorAll('.agent-checkbox').forEach(cb => cb.checked = cb.value === id)
-    updateAgentCount()
-    runPipeline()
-  }, 150)
+// ── Modal de Agente ───────────────────────────────────────────
+let _modalAgent = null
+let _modalHistory = []
+
+// Perguntas rápidas por categoria
+const QUICK_QUESTIONS = {
+  'Financeiro':     ['Faça um DRE simples','Analise fluxo de caixa','Monte um budget mensal'],
+  'Crédito':        ['Analise este perfil de crédito','Crie régua de cobrança','Calcule score de risco'],
+  'Jurídico':       ['Revise este contrato','Explique a LGPD','Crie NDA simples'],
+  'Marketing':      ['Crie post para Instagram','Escreva e-mail marketing','Gere 5 ideias de conteúdo'],
+  'Comercial':      ['Crie script de vendas','Responda objeção de preço','Monte proposta comercial'],
+  'Tecnologia':     ['Crie uma API REST','Revise este código','Explique microserviços'],
+  'RH':             ['Crie job description','Monte roteiro de entrevista','Elabore PDI'],
+  'Administrativo': ['Escreva e-mail formal','Crie ata de reunião','Monte agenda executiva'],
+  'Orquestração':   ['Analise esta tarefa','Faça análise SWOT','Revise esta entrega'],
+  'Diretoria':      ['Monte estratégia de negócio','Analise M&A','Crie plano de 90 dias'],
+  'Criativo':       ['Crie um slogan','Escreva roteiro de vídeo','Gere copy persuasivo'],
 }
+
+function openAgentModal(id) {
+  const agent = allAgents.find(a => a.id === id)
+  if (!agent) return
+
+  _modalAgent = agent
+  _modalHistory = []
+
+  // Preencher header
+  const iconEl = document.getElementById('modal-icon')
+  iconEl.textContent = agent.emoji
+  iconEl.style.background = agent.color + '33'
+  document.getElementById('modal-name').textContent = agent.name
+  document.getElementById('modal-sub').textContent = agent.category + ' · ' + (agent.model || '').split('/').pop()
+
+  // Capabilities
+  document.getElementById('modal-caps').innerHTML =
+    (agent.capabilities || []).map(c => `<span class="cap-pill">${c}</span>`).join('')
+
+  // Perguntas rápidas
+  const qcat = QUICK_QUESTIONS[agent.category] || QUICK_QUESTIONS['Orquestração']
+  document.getElementById('modal-quick').innerHTML =
+    qcat.map(q => `<button class="qbtn" onclick="modalQuick(this)">${q}</button>`).join('')
+
+  // Mensagem de boas-vindas
+  const msgs = document.getElementById('modal-msgs')
+  msgs.innerHTML = ''
+  _modalAppendMsg('ai', `Olá! Sou o <strong>${agent.name}</strong>. ${agent.desc}<br><br>Como posso ajudar você hoje?`, agent.emoji + ' ' + agent.name)
+
+  // Limpar input
+  document.getElementById('modal-input').value = ''
+  document.getElementById('modal-send-btn').disabled = false
+  document.getElementById('modal-typing').style.display = 'none'
+
+  // Abrir modal
+  document.getElementById('agent-modal').classList.add('open')
+  setTimeout(() => document.getElementById('modal-input').focus(), 80)
+}
+
+// Alias para compatibilidade com o botão "Testar Agente"
+function testAgent(id) { openAgentModal(id) }
+
+function closeAgentModal() {
+  document.getElementById('agent-modal').classList.remove('open')
+  _modalAgent = null
+  _modalHistory = []
+}
+
+function _modalBgClick(e) {
+  if (e.target.id === 'agent-modal') closeAgentModal()
+}
+
+function modalQuick(btn) {
+  document.getElementById('modal-input').value = btn.textContent
+  modalSend()
+}
+
+function _modalAppendMsg(role, html, name) {
+  const msgs = document.getElementById('modal-msgs')
+  const el = document.createElement('div')
+  el.className = 'modal-msg ' + role
+  el.innerHTML = `<div class="mn ${role}">${name || (role === 'ai' ? '🤖 Agente' : '👤 Você')}</div><div>${html}</div>`
+  msgs.appendChild(el)
+  msgs.scrollTop = msgs.scrollHeight
+}
+
+async function modalSend() {
+  if (!_modalAgent) return
+  const input = document.getElementById('modal-input')
+  const msg = input.value.trim()
+  if (!msg) return
+
+  input.value = ''
+  document.getElementById('modal-send-btn').disabled = true
+  _modalAppendMsg('user', escHtml(msg), '👤 Você')
+  _modalHistory.push({ role: 'user', content: msg })
+
+  const typing = document.getElementById('modal-typing')
+  typing.style.display = 'block'
+
+  // Criar div de resposta com cursor piscando (streaming)
+  const msgs = document.getElementById('modal-msgs')
+  const aiEl = document.createElement('div')
+  aiEl.className = 'modal-msg ai'
+  aiEl.innerHTML = `<div class="mn ai">${_modalAgent.emoji} ${_modalAgent.name}</div><div class="modal-streaming"></div>`
+  msgs.appendChild(aiEl)
+  const streamDiv = aiEl.querySelector('.modal-streaming')
+  msgs.scrollTop = msgs.scrollHeight
+
+  let fullText = ''
+
+  try {
+    // Tentar SSE streaming via /api/chat com system do agente
+    const sysMsg = { role: 'system', content: _modalAgent.system || ('Você é ' + _modalAgent.name + '. Responda em português.') }
+    const res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messages: [sysMsg, ..._modalHistory],
+        model: _modalAgent.model
+      })
+    })
+
+    if (res.body) {
+      typing.style.display = 'none'
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const parts = buffer.split('\n\n')
+        buffer = parts.pop() || ''
+        for (const part of parts) {
+          for (const line of part.split('\n')) {
+            if (!line.startsWith('data:')) continue
+            const data = line.slice(5).trim()
+            if (data === '[DONE]') continue
+            try {
+              const json = JSON.parse(data)
+              const chunk = json.response ||
+                (json.choices?.[0]?.delta?.content) || ''
+              if (chunk) {
+                fullText += chunk
+                streamDiv.innerHTML = mdToHtml(fullText) + '<span class="cursor-blink"></span>'
+                msgs.scrollTop = msgs.scrollHeight
+              }
+            } catch {}
+          }
+        }
+      }
+      streamDiv.innerHTML = mdToHtml(fullText)
+    } else {
+      // Fallback não-streaming
+      const data = await res.json()
+      fullText = data.response || data.content || 'Sem resposta'
+      typing.style.display = 'none'
+      streamDiv.innerHTML = mdToHtml(fullText)
+    }
+  } catch (err) {
+    typing.style.display = 'none'
+    streamDiv.innerHTML = `<span style="color:#F87171">❌ Erro: ${escHtml(err.message)}</span>`
+  }
+
+  _modalHistory.push({ role: 'assistant', content: fullText })
+  msgs.scrollTop = msgs.scrollHeight
+  document.getElementById('modal-send-btn').disabled = false
+  document.getElementById('modal-input').focus()
+}
+
+// Fechar modal com Escape
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') closeAgentModal()
+})
 
 // ── Status
 async function loadStatus() {

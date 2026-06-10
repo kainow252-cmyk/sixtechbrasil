@@ -1007,6 +1007,72 @@ select option{background:var(--card)}
 .spin{animation:spin 1s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 
+/* ── Modal Agente ─────────────────────────────────────────── */
+.modal-backdrop{
+  display:none;position:fixed;inset:0;z-index:500;
+  background:rgba(0,0,0,.72);backdrop-filter:blur(4px);
+  align-items:center;justify-content:center;
+}
+.modal-backdrop.open{display:flex}
+.modal-box{
+  width:min(680px,96vw);max-height:90vh;
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:18px;display:flex;flex-direction:column;
+  overflow:hidden;animation:modalIn .22s ease;
+}
+@keyframes modalIn{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+.modal-hdr{
+  display:flex;align-items:center;gap:12px;
+  padding:16px 20px;border-bottom:1px solid var(--border);
+  flex-shrink:0;
+}
+.modal-agent-icon{width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0}
+.modal-agent-name{font-size:16px;font-weight:700;color:#fff}
+.modal-agent-sub{font-size:11px;color:var(--muted);margin-top:2px}
+.modal-close{
+  margin-left:auto;background:none;border:none;color:var(--muted);
+  font-size:20px;cursor:pointer;padding:4px 8px;border-radius:6px;
+  line-height:1;transition:color .15s;
+}
+.modal-close:hover{color:#fff}
+.modal-caps{display:flex;flex-wrap:wrap;gap:4px;padding:10px 20px;border-bottom:1px solid var(--border);flex-shrink:0}
+.modal-msgs{
+  flex:1;overflow-y:auto;
+  padding:16px 20px;display:flex;flex-direction:column;gap:10px;
+  min-height:200px;max-height:420px;
+}
+.modal-msg{border-radius:10px;padding:10px 14px;font-size:13px;line-height:1.6}
+.modal-msg.ai{background:var(--card);border-left:3px solid var(--secondary)}
+.modal-msg.user{background:rgba(108,99,255,.12);border-left:3px solid var(--primary)}
+.modal-msg .mn{font-size:11px;font-weight:600;margin-bottom:4px}
+.modal-msg .mn.ai{color:var(--secondary)}
+.modal-msg .mn.user{color:var(--primary)}
+.modal-typing{display:none;padding:4px 20px;font-size:11px;color:var(--muted);flex-shrink:0}
+.modal-input-row{
+  display:flex;gap:8px;padding:12px 20px;
+  border-top:1px solid var(--border);flex-shrink:0;
+}
+.modal-input-row textarea{
+  flex:1;height:52px;resize:none;font-size:13px;
+}
+.modal-send{
+  height:52px;padding:0 18px;border-radius:10px;
+  background:linear-gradient(135deg,var(--primary),#4f46e5);
+  color:#fff;border:none;cursor:pointer;font-size:14px;
+  transition:opacity .15s;
+}
+.modal-send:hover{opacity:.85}
+.modal-send:disabled{opacity:.4;cursor:not-allowed}
+.modal-quick{
+  display:flex;gap:6px;padding:0 20px 10px;flex-wrap:wrap;flex-shrink:0;
+}
+.qbtn{
+  font-size:11px;padding:4px 10px;border-radius:6px;
+  background:var(--card);border:1px solid var(--border);
+  color:var(--muted);cursor:pointer;transition:all .15s;
+}
+.qbtn:hover{background:rgba(108,99,255,.15);color:#fff;border-color:var(--primary)}
+
 /* ── Sidebar Categorias Colapsáveis ───────────────────────── */
 .cat-header{
   display:flex;align-items:center;gap:9px;
@@ -1277,6 +1343,34 @@ Ex: Crie uma API REST em Python com FastAPI para gerenciar usuários com autenti
     </div>
 
   </main>
+</div>
+
+<!-- MODAL AGENTE -->
+<div class="modal-backdrop" id="agent-modal" onclick="_modalBgClick(event)">
+  <div class="modal-box">
+    <div class="modal-hdr">
+      <div class="modal-agent-icon" id="modal-icon"></div>
+      <div>
+        <div class="modal-agent-name" id="modal-name"></div>
+        <div class="modal-agent-sub" id="modal-sub"></div>
+      </div>
+      <button class="modal-close" onclick="closeAgentModal()">&#x2715;</button>
+    </div>
+    <div class="modal-caps" id="modal-caps"></div>
+    <div class="modal-msgs" id="modal-msgs"></div>
+    <div class="modal-typing" id="modal-typing">
+      <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--secondary);animation:pulse 1s infinite;margin-right:5px"></span>
+      digitando...
+    </div>
+    <div class="modal-quick" id="modal-quick"></div>
+    <div class="modal-input-row">
+      <textarea id="modal-input" placeholder="Digite sua mensagem... (Enter para enviar)"
+        onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();modalSend()}"></textarea>
+      <button class="modal-send" id="modal-send-btn" onclick="modalSend()">
+        <i class="fas fa-paper-plane"></i>
+      </button>
+    </div>
+  </div>
 </div>
 
 <script src="/static/app.js"></script>
