@@ -115,9 +115,9 @@ function renderSidebarCategories() {
   })
 }
 
-// ── Toggle categoria (usa referência ao elemento, sem id dinâmico)
+// ── Toggle categoria (apenas expande/recolhe na sidebar — não muda tab)
 function _toggleCategory(headerEl, cat) {
-  const agentsEl = headerEl.nextElementSibling // .cat-agents
+  const agentsEl = headerEl.nextElementSibling
   const isOpen = agentsEl.classList.contains('open')
 
   // Fechar todos
@@ -127,7 +127,7 @@ function _toggleCategory(headerEl, cat) {
   if (!isOpen) {
     agentsEl.classList.add('open')
     headerEl.classList.add('open')
-    openCategory(cat)
+    // NÃO muda de tab — só expande a lista de agentes na sidebar
   }
 }
 
@@ -162,15 +162,13 @@ function openCategory(cat) {
   }
 }
 
-// ── Click no agente da sidebar → destaca card
+// ── Click no agente da sidebar → abre modal direto (mesma tela)
 function _openCategoryAgent(itemEl, cat, agentId) {
-  openCategory(cat)
+  // Marcar ativo na sidebar
   document.querySelectorAll('.cat-agent-item').forEach(el => el.classList.remove('active'))
   itemEl.classList.add('active')
-  setTimeout(() => {
-    const card = document.querySelector('.agent-card[data-id="' + agentId + '"]')
-    if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' })
-  }, 80)
+  // Abrir modal do agente sem mudar de tab
+  openAgentModal(agentId)
 }
 
 // ── Voltar para todos os agentes
