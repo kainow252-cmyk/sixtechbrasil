@@ -1,6 +1,33 @@
 // SixTech MAS v3.0 — Frontend App
 // Estado global
 let agents = [], models = [], chatHistory = [], allAgents = []
+let currentCategory = null
+
+// ── Categorias: ícone, cor de destaque
+const CAT_META = {
+  'Orquestração':   { icon: '🎯', color: '#22D3EE' },
+  'Administrativo': { icon: '🏢', color: '#6C63FF' },
+  'Financeiro':     { icon: '💰', color: '#F59E0B' },
+  'Crédito':        { icon: '🏦', color: '#3B82F6' },
+  'Seguros':        { icon: '🛡️', color: '#0EA5E9' },
+  'Jurídico':       { icon: '⚖️', color: '#D97706' },
+  'Afiliados':      { icon: '🤝', color: '#7C3AED' },
+  'Marketing':      { icon: '📢', color: '#EC4899' },
+  'Comercial':      { icon: '📞', color: '#059669' },
+  'Imobiliário':    { icon: '🏠', color: '#0891B2' },
+  'RH':             { icon: '👥', color: '#7C3AED' },
+  'Saúde':          { icon: '🏥', color: '#EF4444' },
+  'Automotivo':     { icon: '🚗', color: '#6366F1' },
+  'Logística':      { icon: '🚚', color: '#78350F' },
+  'Turismo':        { icon: '🌍', color: '#0284C7' },
+  'Educação':       { icon: '📚', color: '#16A34A' },
+  'Tecnologia':     { icon: '💻', color: '#F87171' },
+  'Indústria':      { icon: '🏭', color: '#92400E' },
+  'Agronegócio':    { icon: '🌾', color: '#65A30D' },
+  'Governo':        { icon: '🏛️', color: '#1D4ED8' },
+  'Criativo':       { icon: '🎨', color: '#BE185D' },
+  'Diretoria':      { icon: '👑', color: '#92400E' },
+}
 
 // ── Inicialização
 async function init() {
@@ -14,13 +41,139 @@ async function init() {
     allAgents = [...agents]
     models = modelsData.models
 
+    renderSidebarCategories()
     renderAgentChecklist()
-    renderAgentsGrid()
+    renderAgentsGrid(allAgents)
     renderChatModels()
     loadStatus()
+
+    // Atualizar stats sidebar
+    const sbA = document.getElementById('sb-agents')
+    if (sbA) sbA.textContent = agents.length
   } catch(e) {
     console.error('Init error:', e)
   }
+}
+
+// ── Sidebar: renderizar categorias colapsáveis
+function renderSidebarCategories() {
+  const container = document.getElementById('sidebar-categories')
+  if (!container) return
+
+  // Agrupar agentes por categoria (mantendo ordem do CAT_META)
+  const groups = {}
+  for (const cat of Object.keys(CAT_META)) {
+    const catAgents = allAgents.filter(a => a.category === cat)
+    if (catAgents.length > 0) groups[cat] = catAgents
+  }
+  // Categorias extras não listadas no CAT_META
+  for (const a of allAgents) {
+    if (!groups[a.category]) groups[a.category] = allAgents.filter(x => x.category === a.category)
+  }
+
+  container.innerHTML = Object.entries(groups).map(([cat, catAgents]) => {
+    const meta = CAT_META[cat] || { icon: '🤖', color: '#6C63FF' }
+    const items = catAgents.map(a => `
+      <div class="cat-agent-item" data-agent-id="${a.id}"
+           onclick="openCategoryAgent('${cat}','${a.id}')">
+        <span class="ag-emoji">${a.emoji}</span>
+        <span class="ag-name">${a.name}</span>
+        <span class="ag-badge ${a.source === 'hybrid' ? 'badge-hybrid' : 'badge-cf'}">${a.source === 'hybrid' ? '⚡' : '☁️'}</span>
+      </div>
+    `).join('')
+
+    return `
+      <div class="cat-group" data-cat="${cat}">
+        <div class="cat-header" onclick="toggleCategory('${cat}')">
+          <span class="cat-icon" style="background:${meta.color}22">${meta.icon}</span>
+          <span class="cat-name">${cat}</span>
+          <span class="cat-count">${catAgents.length}</span>
+          <span class="cat-arrow">›</span>
+        </div>
+        <div class="cat-agents" id="cat-agents-${cat.replace(/[^a-zA-Z]/g,'')}">
+          ${items}
+        </div>
+      </div>
+    `
+  }).join('')
+}
+
+// ── Toggle de categoria na sidebar
+function toggleCategory(cat) {
+  const safeId = cat.replace(/[^a-zA-Z]/g, '')
+  const agentsEl = document.getElementById('cat-agents-' + safeId)
+  const headerEl = agentsEl ? agentsEl.previousElementSibling : null
+  if (!agentsEl) return
+
+  const isOpen = agentsEl.classList.contains('open')
+  // Fechar todos
+  document.querySelectorAll('.cat-agents').forEach(el => el.classList.remove('open'))
+  document.querySelectorAll('.cat-header').forEach(el => el.classList.remove('open'))
+
+  if (!isOpen) {
+    agentsEl.classList.add('open')
+    if (headerEl) headerEl.classList.add('open')
+    // Abrir tab agentes e filtrar por categoria
+    openCategory(cat)
+  }
+}
+
+// ── Abrir categoria → mostra tab agentes filtrada
+function openCategory(cat) {
+  currentCategory = cat
+  const filtered = allAgents.filter(a => a.category === cat)
+  const meta = CAT_META[cat] || { icon: '🤖', color: '#6C63FF' }
+
+  // Mostrar tab agentes
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'))
+  document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'))
+  const panel = document.getElementById('tab-agents')
+  if (panel) panel.classList.add('active')
+
+  // Atualizar header
+  const titleEl = document.getElementById('agents-cat-title')
+  const subEl = document.getElementById('agents-cat-sub')
+  if (titleEl) titleEl.textContent = meta.icon + ' ' + cat
+  if (subEl) subEl.textContent = filtered.length + ' agente' + (filtered.length !== 1 ? 's' : '') + ' disponíve' + (filtered.length !== 1 ? 'is' : 'l')
+
+  renderAgentsGrid(filtered)
+
+  // Fechar sidebar no mobile
+  if (window.innerWidth <= 540) {
+    const s = document.getElementById('sidebar')
+    const o = document.getElementById('sidebar-overlay')
+    if (s && !s.classList.contains('collapsed')) {
+      s.classList.add('collapsed')
+      if (o) o.style.display = 'none'
+    }
+  }
+}
+
+// ── Abrir categoria e destacar agente específico
+function openCategoryAgent(cat, agentId) {
+  openCategory(cat)
+  // Marcar item ativo na sidebar
+  document.querySelectorAll('.cat-agent-item').forEach(el => el.classList.remove('active'))
+  const item = document.querySelector(`.cat-agent-item[data-agent-id="${agentId}"]`)
+  if (item) item.classList.add('active')
+  // Scroll suave para o card
+  setTimeout(() => {
+    const card = document.querySelector(`.agent-card[data-id="${agentId}"]`)
+    if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }, 100)
+}
+
+// ── Voltar para todos os agentes
+function showAllAgents() {
+  currentCategory = null
+  const titleEl = document.getElementById('agents-cat-title')
+  const subEl = document.getElementById('agents-cat-sub')
+  if (titleEl) titleEl.textContent = 'Todos os Agentes'
+  if (subEl) subEl.textContent = allAgents.length + ' agentes disponíveis'
+  renderAgentsGrid(allAgents)
+  document.querySelectorAll('.cat-header').forEach(el => el.classList.remove('open'))
+  document.querySelectorAll('.cat-agents').forEach(el => el.classList.remove('open'))
+  document.querySelectorAll('.cat-agent-item').forEach(el => el.classList.remove('active'))
 }
 
 // ── Tabs
@@ -30,7 +183,9 @@ function showTab(name, el) {
   const panel = document.getElementById('tab-' + name)
   if (panel) panel.classList.add('active')
   if (el) el.classList.add('active')
-  // fechar sidebar no mobile após clicar
+  // Se voltou para agents sem categoria, mostrar todos
+  if (name === 'agents' && !currentCategory) showAllAgents()
+  // fechar sidebar no mobile
   if (window.innerWidth <= 540) {
     const s = document.getElementById('sidebar')
     const o = document.getElementById('sidebar-overlay')
@@ -345,12 +500,16 @@ function clearChat() {
 }
 
 // ── Agents Grid
-function renderAgentsGrid(filtered) {
-  const list = filtered || allAgents
+function renderAgentsGrid(list) {
+  if (!list) list = allAgents
   const grid = document.getElementById('agents-grid')
   if (!grid) return
+  if (list.length === 0) {
+    grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--muted)">Nenhum agente encontrado</div>'
+    return
+  }
   grid.innerHTML = list.map(a => `
-    <div class="agent-card">
+    <div class="agent-card" data-id="${a.id}">
       <div class="agent-card-hdr">
         <div class="agent-icon" style="background:${a.color}33">${a.emoji}</div>
         <div>
@@ -371,18 +530,15 @@ function renderAgentsGrid(filtered) {
 }
 
 function filterAgents(q) {
-  const filtered = allAgents.filter(a =>
-    a.name.toLowerCase().includes(q.toLowerCase()) ||
-    a.desc.toLowerCase().includes(q.toLowerCase()) ||
-    a.category.toLowerCase().includes(q.toLowerCase())
-  )
+  const base = currentCategory ? allAgents.filter(a => a.category === currentCategory) : allAgents
+  const filtered = q.trim()
+    ? base.filter(a =>
+        a.name.toLowerCase().includes(q.toLowerCase()) ||
+        a.desc.toLowerCase().includes(q.toLowerCase()) ||
+        (a.capabilities || []).some(c => c.toLowerCase().includes(q.toLowerCase()))
+      )
+    : base
   renderAgentsGrid(filtered)
-}
-
-function filterBySource(src, el) {
-  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'))
-  if (el) el.classList.add('active')
-  renderAgentsGrid(src === 'all' ? allAgents : allAgents.filter(a => a.source === src))
 }
 
 async function testAgent(id) {
