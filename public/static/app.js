@@ -66,16 +66,15 @@ function renderSidebarCategories() {
     const catAgents = allAgents.filter(a => a.category === cat)
     if (catAgents.length > 0) groups[cat] = catAgents
   }
-  // Categorias extras não listadas no CAT_META
   for (const a of allAgents) {
     if (!groups[a.category]) groups[a.category] = allAgents.filter(x => x.category === a.category)
   }
 
+  // Montar HTML sem onclick inline — usar data-* e addEventListener
   container.innerHTML = Object.entries(groups).map(([cat, catAgents]) => {
     const meta = CAT_META[cat] || { icon: '🤖', color: '#6C63FF' }
     const items = catAgents.map(a => `
-      <div class="cat-agent-item" data-agent-id="${a.id}"
-           onclick="openCategoryAgent('${cat}','${a.id}')">
+      <div class="cat-agent-item" data-agent-id="${a.id}" data-cat="${encodeURIComponent(cat)}">
         <span class="ag-emoji">${a.emoji}</span>
         <span class="ag-name">${a.name}</span>
         <span class="ag-badge ${a.source === 'hybrid' ? 'badge-hybrid' : 'badge-cf'}">${a.source === 'hybrid' ? '⚡' : '☁️'}</span>
@@ -83,37 +82,51 @@ function renderSidebarCategories() {
     `).join('')
 
     return `
-      <div class="cat-group" data-cat="${cat}">
-        <div class="cat-header" onclick="toggleCategory('${cat}')">
+      <div class="cat-group">
+        <div class="cat-header" data-cat="${encodeURIComponent(cat)}">
           <span class="cat-icon" style="background:${meta.color}22">${meta.icon}</span>
           <span class="cat-name">${cat}</span>
           <span class="cat-count">${catAgents.length}</span>
           <span class="cat-arrow">›</span>
         </div>
-        <div class="cat-agents" id="cat-agents-${cat.replace(/[^a-zA-Z]/g,'')}">
+        <div class="cat-agents">
           ${items}
         </div>
       </div>
     `
   }).join('')
+
+  // Delegar eventos via bubbling — zero onclick inline
+  container.addEventListener('click', function(e) {
+    // Click no cat-header (ou filho dele)
+    const header = e.target.closest('.cat-header')
+    if (header) {
+      const cat = decodeURIComponent(header.dataset.cat)
+      _toggleCategory(header, cat)
+      return
+    }
+    // Click no cat-agent-item (ou filho dele)
+    const item = e.target.closest('.cat-agent-item')
+    if (item) {
+      const cat = decodeURIComponent(item.dataset.cat)
+      const agentId = item.dataset.agentId
+      _openCategoryAgent(item, cat, agentId)
+    }
+  })
 }
 
-// ── Toggle de categoria na sidebar
-function toggleCategory(cat) {
-  const safeId = cat.replace(/[^a-zA-Z]/g, '')
-  const agentsEl = document.getElementById('cat-agents-' + safeId)
-  const headerEl = agentsEl ? agentsEl.previousElementSibling : null
-  if (!agentsEl) return
-
+// ── Toggle categoria (usa referência ao elemento, sem id dinâmico)
+function _toggleCategory(headerEl, cat) {
+  const agentsEl = headerEl.nextElementSibling // .cat-agents
   const isOpen = agentsEl.classList.contains('open')
+
   // Fechar todos
   document.querySelectorAll('.cat-agents').forEach(el => el.classList.remove('open'))
   document.querySelectorAll('.cat-header').forEach(el => el.classList.remove('open'))
 
   if (!isOpen) {
     agentsEl.classList.add('open')
-    if (headerEl) headerEl.classList.add('open')
-    // Abrir tab agentes e filtrar por categoria
+    headerEl.classList.add('open')
     openCategory(cat)
   }
 }
@@ -149,18 +162,15 @@ function openCategory(cat) {
   }
 }
 
-// ── Abrir categoria e destacar agente específico
-function openCategoryAgent(cat, agentId) {
+// ── Click no agente da sidebar → destaca card
+function _openCategoryAgent(itemEl, cat, agentId) {
   openCategory(cat)
-  // Marcar item ativo na sidebar
   document.querySelectorAll('.cat-agent-item').forEach(el => el.classList.remove('active'))
-  const item = document.querySelector(`.cat-agent-item[data-agent-id="${agentId}"]`)
-  if (item) item.classList.add('active')
-  // Scroll suave para o card
+  itemEl.classList.add('active')
   setTimeout(() => {
-    const card = document.querySelector(`.agent-card[data-id="${agentId}"]`)
+    const card = document.querySelector('.agent-card[data-id="' + agentId + '"]')
     if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' })
-  }, 100)
+  }, 80)
 }
 
 // ── Voltar para todos os agentes
