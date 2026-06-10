@@ -318,6 +318,17 @@ function openAgentFullChat(id, sidebarItemEl) {
   const inputEl = document.getElementById('fc-input')
   if (inputEl) { inputEl.value = ''; setTimeout(() => inputEl.focus(), 80) }
 
+  // Resetar para aba Chat ao trocar de agente
+  const chatTab = document.querySelector('.fc-tab[data-tab="chat"]')
+  switchFcTab('chat', chatTab)
+
+  // Inicializar tipos de documento para este agente
+  initDocTypes()
+
+  // Resetar doc/análise
+  clearDocument()
+  clearUpload()
+
   // Fechar sidebar no mobile
   if (window.innerWidth <= 540) {
     const s = document.getElementById('sidebar')
@@ -585,47 +596,15 @@ function renderChatModels() {
   const sel = document.getElementById('chat-model')
   if (!sel) return
   sel.innerHTML = models.map(m => `<option value="${m.id}">${m.label}</option>`).join('')
-  sel.addEventListener('change', () => {
-    const badge = document.getElementById('chat-model-badge')
-    if (badge) {
-      const found = models.find(m => m.id === sel.value)
-      badge.textContent = found ? found.label : sel.value
-    }
-  })
-  const agentSel = document.getElementById('chat-agent')
-  if (agentSel) {
-    agentSel.innerHTML = '<option value="">Nenhum (chat livre)</option>' +
-      allAgents.map(a => `<option value="${a.id}">${a.emoji} ${a.name}</option>`).join('')
-  }
 }
 
 async function sendChat() {
   const input = document.getElementById('chat-input')
   const msg = input.value.trim()
   if (!msg) return
-  const agentId = document.getElementById('chat-agent').value
   input.value = ''
 
-  if (agentId) {
-    appendChatMsg('user', msg)
-    document.getElementById('typing-indicator').style.display = ''
-    try {
-      const res = await fetch('/api/agent/' + agentId, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: msg })
-      })
-      const data = await res.json()
-      document.getElementById('typing-indicator').style.display = 'none'
-      const agent = allAgents.find(a => a.id === agentId)
-      appendChatMsg('assistant', data.response || 'Sem resposta', agent?.name || 'Agente', agent?.emoji || '🤖')
-    } catch(e) {
-      document.getElementById('typing-indicator').style.display = 'none'
-      appendChatMsg('assistant', '❌ Erro: ' + e.message)
-    }
-    return
-  }
-
-  const model = document.getElementById('chat-model').value
+  const model = document.getElementById('chat-model')?.value || ''
   chatHistory.push({ role: 'user', content: msg })
   appendChatMsg('user', msg)
   document.getElementById('typing-indicator').style.display = ''
@@ -795,6 +774,509 @@ function mdToHtml(md) {
 
 // Inicializar quando DOM pronto — verifica sessão antes de mostrar o app
 document.addEventListener('DOMContentLoaded', checkAuth)
+
+// ════════════════════════════════════════════════════════════
+// ABAS DO AGENTE (Chat / Gerar Documento / Analisar)
+// ════════════════════════════════════════════════════════════
+function switchFcTab(tab, el) {
+  document.querySelectorAll('.fc-tab').forEach(t => t.classList.remove('active'))
+  document.querySelectorAll('.fc-tab-panel').forEach(p => p.classList.remove('active'))
+  if (el) el.classList.add('active')
+  const panel = document.getElementById('fc-panel-' + tab)
+  if (panel) panel.classList.add('active')
+
+  // Ajustar botão "Limpar" conforme aba
+  const clearBtn = document.getElementById('fc-clear-btn')
+  if (clearBtn) {
+    if (tab === 'chat') { clearBtn.style.display = 'flex'; clearBtn.onclick = fcClear }
+    else if (tab === 'doc') { clearBtn.style.display = 'flex'; clearBtn.onclick = clearDocument }
+    else { clearBtn.style.display = 'none' }
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+// GERAR DOCUMENTO
+// ════════════════════════════════════════════════════════════
+
+// Tipos de documento por categoria do agente
+const DOC_TYPES = {
+  'Jurídico':       ['NDA','Contrato de Prestação','Contrato de Trabalho','LGPD/Política de Privacidade','Procuração','Distrato','Termo de Confidencialidade'],
+  'Financeiro':     ['DRE','Fluxo de Caixa','Relatório de Budget','Análise de Investimento','Relatório Financeiro'],
+  'Administrativo': ['Ata de Reunião','E-mail Formal','Ofício','Memorando','Proposta Comercial','Manual de Procedimentos'],
+  'RH':             ['Contrato CLT','Job Description','Política de Férias','Avaliação de Desempenho','PDI','Carta de Demissão'],
+  'Comercial':      ['Proposta Comercial','Script de Vendas','Contrato de Venda','Carta de Cobrança'],
+  'Marketing':      ['Briefing de Campanha','Roteiro de Vídeo','Plano de Marketing','Relatório de Resultados'],
+  'Tecnologia':     ['Especificação Técnica','API Docs','README','Política de Segurança','SLA'],
+  'Diretoria':      ['Plano Estratégico','Relatório Executivo','Board Report','OKRs','Plano de 90 Dias'],
+  'Crédito':        ['Política de Crédito','Régua de Cobrança','Relatório de Risco','Contrato de Empréstimo'],
+  'default':        ['Relatório','Contrato','Proposta','Manual','Documento Personalizado']
+}
+
+let _docContent = ''    // texto puro do documento gerado
+let _docTitle   = ''    // título do documento
+let _analysisContent = '' // texto puro da análise
+
+function initDocTypes() {
+  const agent = allAgents.find(a => a.id === _activeAgentId)
+  if (!agent) return
+  const types = DOC_TYPES[agent.category] || DOC_TYPES['default']
+  const grid = document.getElementById('doc-types-grid')
+  if (!grid) return
+  grid.innerHTML = types.map(t =>
+    `<button class="doc-type-btn" onclick="selectDocType(this,'${escHtml(t)}')">${t}</button>`
+  ).join('')
+}
+
+function selectDocType(btn, type) {
+  document.querySelectorAll('.doc-type-btn').forEach(b => b.classList.remove('sel'))
+  btn.classList.add('sel')
+  const inp = document.getElementById('doc-type-input')
+  if (inp) inp.value = type
+}
+
+async function generateDocument() {
+  const agentId  = _activeAgentId
+  if (!agentId) return
+  const docType  = document.getElementById('doc-type-input')?.value.trim()
+  const parties  = document.getElementById('doc-parties')?.value.trim()
+  const instrRaw = document.getElementById('doc-instructions')?.value.trim()
+  if (!docType) { alert('Informe o tipo de documento'); return }
+
+  const instructions = [instrRaw, parties ? `Partes: ${parties}` : ''].filter(Boolean).join(' | ')
+
+  const btn    = document.getElementById('btn-gen-doc')
+  const status = document.getElementById('doc-gen-status')
+  const previewArea = document.getElementById('doc-preview-area')
+  const toolbar = document.getElementById('doc-result-toolbar')
+
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Gerando...' }
+  if (status) status.textContent = 'Aguardando IA...'
+  if (toolbar) toolbar.style.display = 'none'
+  if (previewArea) {
+    previewArea.className = 'doc-streaming'
+    previewArea.innerHTML = '<span style="color:var(--muted);font-size:12px"><i class="fas fa-spinner fa-spin"></i> Gerando documento...</span>'
+  }
+
+  _docContent = ''
+  _docTitle   = docType
+
+  try {
+    const res = await fetch('/api/document/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ agentId, docType, instructions })
+    })
+
+    if (!res.ok) { throw new Error('Erro ' + res.status) }
+    if (!res.body) { throw new Error('Stream não disponível') }
+
+    if (previewArea) previewArea.innerHTML = ''
+
+    const reader  = res.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      const parts = buffer.split('\n\n')
+      buffer = parts.pop() || ''
+      for (const part of parts) {
+        for (const line of part.split('\n')) {
+          if (!line.startsWith('data:')) continue
+          const data = line.slice(5).trim()
+          if (data === '[DONE]') continue
+          try {
+            const json  = JSON.parse(data)
+            const chunk = json.response || json.choices?.[0]?.delta?.content || ''
+            if (chunk) {
+              _docContent += chunk
+              if (previewArea) {
+                previewArea.innerHTML = docMdToHtml(_docContent) +
+                  '<span style="display:inline-block;width:2px;height:1em;background:var(--secondary);animation:blink .7s infinite;vertical-align:text-bottom"></span>'
+                previewArea.scrollTop = previewArea.scrollHeight
+              }
+            }
+          } catch {}
+        }
+      }
+    }
+
+    // Finalizar
+    if (previewArea) { previewArea.className = 'doc-preview'; previewArea.innerHTML = docMdToHtml(_docContent) }
+    if (toolbar) {
+      toolbar.style.display = 'flex'
+      const titleEl = document.getElementById('doc-result-title')
+      if (titleEl) titleEl.textContent = docType
+    }
+    if (status) status.textContent = '✅ Documento gerado!'
+    setTimeout(() => { if (status) status.textContent = '' }, 3000)
+
+  } catch(err) {
+    if (previewArea) {
+      previewArea.className = 'doc-preview'
+      previewArea.innerHTML = `<div style="color:#F87171;padding:20px"><i class="fas fa-exclamation-circle"></i> Erro ao gerar: ${escHtml(err.message)}</div>`
+    }
+    if (status) status.textContent = '❌ Erro'
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-magic"></i> Gerar Documento com IA' }
+  }
+}
+
+function clearDocument() {
+  _docContent = ''; _docTitle = ''
+  const previewArea = document.getElementById('doc-preview-area')
+  const toolbar = document.getElementById('doc-result-toolbar')
+  if (previewArea) {
+    previewArea.className = 'doc-preview doc-empty'
+    previewArea.innerHTML = '<div class="doc-empty-icon">📄</div><div style="font-size:14px;font-weight:600;color:var(--text)">Nenhum documento gerado</div><div style="font-size:12px">Preencha o formulário e clique em Gerar Documento com IA</div>'
+  }
+  if (toolbar) toolbar.style.display = 'none'
+  const inp = document.getElementById('doc-type-input')
+  const parties = document.getElementById('doc-parties')
+  const instr = document.getElementById('doc-instructions')
+  if (inp) inp.value = ''
+  if (parties) parties.value = ''
+  if (instr) instr.value = ''
+  document.querySelectorAll('.doc-type-btn').forEach(b => b.classList.remove('sel'))
+}
+
+// ── Download de documento
+function downloadDoc(format) {
+  if (!_docContent) return
+  const title = _docTitle || 'documento'
+  _downloadContent(_docContent, title, format)
+}
+
+function downloadAnalysis(format) {
+  if (!_analysisContent) return
+  _downloadContent(_analysisContent, 'analise-documento', format)
+}
+
+function _downloadContent(content, title, format) {
+  const slug = title.toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'').slice(0,40)
+  const date = new Date().toISOString().slice(0,10)
+  const fileName = `${slug}-${date}`
+
+  if (format === 'txt') {
+    _triggerDownload(content, fileName + '.txt', 'text/plain;charset=utf-8')
+
+  } else if (format === 'word') {
+    // RTF com suporte a caracteres especiais — abre no Word
+    const rtf = _mdToRtf(content, title)
+    _triggerDownload(rtf, fileName + '.rtf', 'application/rtf')
+
+  } else if (format === 'pdf') {
+    // Gera PDF via print do browser em iframe oculto
+    _printAsPdf(content, title, fileName)
+  }
+}
+
+function _triggerDownload(content, fileName, mimeType) {
+  const blob = new Blob([content], { type: mimeType })
+  const url  = URL.createObjectURL(blob)
+  const a    = document.createElement('a')
+  a.href = url; a.download = fileName
+  document.body.appendChild(a); a.click()
+  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url) }, 500)
+}
+
+function _mdToRtf(md, title) {
+  // Converte markdown para RTF básico
+  const esc = s => s.replace(/\\/g,'\\\\').replace(/\{/g,'\\{').replace(/\}/g,'\\}')
+    .replace(/[^\x00-\x7F]/g, c => {
+      const code = c.charCodeAt(0)
+      return code > 255 ? `\\u${code}?` : `\\'${code.toString(16).padStart(2,'0')}`
+    })
+  let lines = md.split('\n')
+  let rtf = '{\\rtf1\\ansi\\deff0{\\fonttbl{\\f0 Times New Roman;}{\\f1 Arial;}}{\\colortbl;\\red108\\green99\\blue255;\\red34\\blue238\\green211;}\\paperw12240\\paperh15840\\margl1800\\margr1800\\margt1440\\margb1440\n'
+  rtf += `{\\pard\\qc\\b\\f1\\fs32 ${esc(title)}\\par}\\pard\\fs4\\par\n`
+  for (const line of lines) {
+    const l = line.trim()
+    if (!l) { rtf += '\\pard\\fs4\\par\n'; continue }
+    if (l.startsWith('# '))   { rtf += `\\pard\\b\\f1\\fs28 ${esc(l.slice(2))}\\b0\\par\n`; continue }
+    if (l.startsWith('## '))  { rtf += `\\pard\\b\\f1\\fs24\\cf1 ${esc(l.slice(3))}\\cf0\\b0\\par\n`; continue }
+    if (l.startsWith('### ')) { rtf += `\\pard\\b\\f1\\fs22 ${esc(l.slice(4))}\\b0\\par\n`; continue }
+    if (l.startsWith('---'))  { rtf += '\\pard\\brdrb\\brdrs\\brdrw10\\brsp20\\par\n'; continue }
+    if (l.match(/^[-*] /))    { rtf += `\\pard\\fi-360\\li360 • ${esc(l.slice(2))}\\par\n`; continue }
+    // Bold **text**
+    const formatted = esc(l)
+      .replace(/\*\*([^*]+)\*\*/g, '{\\b $1}')
+    rtf += `\\pard\\f0\\fs22 ${formatted}\\par\n`
+  }
+  rtf += '}'
+  return rtf
+}
+
+function _printAsPdf(md, title, fileName) {
+  const html = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>${escHtml(title)}</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Times New Roman',serif;font-size:12pt;line-height:1.8;color:#111;padding:2.5cm 3cm;max-width:21cm;margin:0 auto}
+  h1{font-size:18pt;font-weight:700;text-align:center;margin:0 0 20px;border-bottom:2px solid #333;padding-bottom:10px}
+  h2{font-size:14pt;font-weight:700;margin:20px 0 8px;color:#1a1a2e}
+  h3{font-size:12pt;font-weight:700;margin:16px 0 6px}
+  p{margin:6px 0}
+  hr{border:none;border-top:1px solid #ccc;margin:16px 0}
+  ul,ol{margin:8px 0 8px 24px}
+  li{margin:3px 0}
+  strong{font-weight:700}
+  em{font-style:italic}
+  table{width:100%;border-collapse:collapse;margin:10px 0}
+  th{background:#f0f0f0;padding:6px 10px;border:1px solid #ccc;font-weight:700;font-size:11pt}
+  td{padding:6px 10px;border:1px solid #ccc;font-size:11pt}
+  pre{background:#f8f8f8;border:1px solid #ddd;border-radius:4px;padding:10px;font-family:monospace;font-size:10pt;overflow-x:auto}
+  code{font-family:monospace;background:#f0f0f0;padding:0 3px;border-radius:2px}
+  blockquote{border-left:3px solid #6C63FF;padding-left:12px;color:#555;margin:8px 0}
+  @media print{body{padding:0}@page{margin:2cm 2.5cm}button{display:none}}
+</style>
+</head>
+<body>
+${mdToHtmlPrint(md)}
+<script>window.onload=function(){window.print();setTimeout(()=>window.close(),1000)}<\/script>
+</body>
+</html>`
+  const w = window.open('','_blank','width=900,height=700')
+  if (w) { w.document.write(html); w.document.close() }
+}
+
+function mdToHtmlPrint(md) {
+  if (!md) return ''
+  let s = md
+  s = s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+  s = s.replace(/```[\s\S]*?```/g, m => `<pre>${m.replace(/```\w*\n?/g,'').replace(/```/g,'')}</pre>`)
+  s = s.replace(/`([^`]+)`/g,'<code>$1</code>')
+  s = s.replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>')
+  s = s.replace(/\*([^*\n]+)\*/g,'<em>$1</em>')
+  s = s.replace(/^# (.+)$/gm, '<h1>$1</h1>')
+  s = s.replace(/^## (.+)$/gm, '<h2>$1</h2>')
+  s = s.replace(/^### (.+)$/gm, '<h3>$1</h3>')
+  s = s.replace(/^[-*] (.+)$/gm, '<li>$1</li>')
+  s = s.replace(/^(\d+)\. (.+)$/gm, '<li>$1. $2</li>')
+  s = s.replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>')
+  s = s.replace(/^---$/gm,'<hr>')
+  // Agrupar <li> em <ul>
+  s = s.replace(/(<li>.*<\/li>\n?)+/g, m => `<ul>${m}</ul>`)
+  s = s.replace(/\n\n+/g,'</p><p>').replace(/\n/g,'<br>')
+  return `<p>${s}</p>`
+}
+
+function copyDocument() {
+  if (!_docContent) return
+  navigator.clipboard.writeText(_docContent).then(() => {
+    const btn = document.querySelector('.btn-copy-doc')
+    if (btn) { btn.innerHTML = '<i class="fas fa-check"></i> Copiado!'; setTimeout(() => { btn.innerHTML = '<i class="fas fa-copy"></i> Copiar' }, 2000) }
+  })
+}
+
+// ── Markdown para HTML do preview (versão completa para docs)
+function docMdToHtml(md) {
+  if (!md) return ''
+  let s = String(md)
+  s = s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+  s = s.replace(/```(\w*)?\n?([\s\S]*?)```/g, (_,__,code) =>
+    `<pre><code>${code.trim()}</code></pre>`)
+  s = s.replace(/`([^`]+)`/g,'<code>$1</code>')
+  s = s.replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>')
+  s = s.replace(/\*([^*\n]+)\*/g,'<em>$1</em>')
+  s = s.replace(/^# (.+)$/gm,'<h1>$1</h1>')
+  s = s.replace(/^## (.+)$/gm,'<h2>$1</h2>')
+  s = s.replace(/^### (.+)$/gm,'<h3>$1</h3>')
+  s = s.replace(/^[-*] (.+)$/gm,'<li>• $1</li>')
+  s = s.replace(/^(\d+)\. (.+)$/gm,'<li>$1. $2</li>')
+  s = s.replace(/^> (.+)$/gm,'<blockquote>$1</blockquote>')
+  s = s.replace(/^---$/gm,'<hr>')
+  // Tabelas Markdown
+  s = s.replace(/^\|(.+)\|$/gm, (row) => {
+    const cells = row.split('|').slice(1,-1)
+    const isHeader = cells.every(c => c.trim())
+    return `<tr>${cells.map(c => `<td>${c.trim()}</td>`).join('')}</tr>`
+  })
+  s = s.replace(/(<tr>.*<\/tr>\n?)+/g, m => `<table>${m}</table>`)
+  s = s.replace(/(<li>.*\n?)+/g, m => `<ul>${m}</ul>`)
+  s = s.replace(/\n/g,'<br>')
+  return s
+}
+
+// ════════════════════════════════════════════════════════════
+// ANALISAR ARQUIVO
+// ════════════════════════════════════════════════════════════
+let _uploadedFile     = null
+let _uploadedContent  = ''
+
+function handleFileSelect(input) {
+  const file = input.files?.[0]
+  if (file) _loadFile(file)
+  input.value = ''
+}
+
+function handleFileDrop(e) {
+  e.preventDefault()
+  document.getElementById('upload-zone')?.classList.remove('drag-over')
+  const file = e.dataTransfer.files?.[0]
+  if (file) _loadFile(file)
+}
+
+async function _loadFile(file) {
+  const maxSize = 5 * 1024 * 1024
+  if (file.size > maxSize) { alert('Arquivo muito grande. Máximo 5 MB.'); return }
+
+  _uploadedFile = file
+  const nameEl = document.getElementById('upload-file-name')
+  const labelEl = document.getElementById('upload-file-label')
+  if (nameEl) nameEl.style.display = 'flex'
+  if (labelEl) labelEl.textContent = `${file.name} (${(file.size/1024).toFixed(1)} KB)`
+
+  // Ler conteúdo
+  const ext = file.name.split('.').pop().toLowerCase()
+  if (ext === 'txt' || ext === 'md') {
+    _uploadedContent = await file.text()
+  } else if (ext === 'pdf') {
+    // Tenta ler o PDF como texto usando FileReader (extração básica)
+    _uploadedContent = await _extractPdfText(file)
+  } else if (ext === 'doc' || ext === 'docx') {
+    // Lê como texto puro (extração de texto bruto de DOCX)
+    _uploadedContent = await _extractDocxText(file)
+  } else {
+    _uploadedContent = await file.text()
+  }
+}
+
+async function _extractPdfText(file) {
+  // Leitura de texto bruto do PDF (funciona para PDFs baseados em texto)
+  return new Promise((resolve) => {
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      const binary = e.target.result
+      // Extração simples de texto do PDF
+      let text = ''
+      try {
+        const matches = binary.match(/\(([^)]{1,200})\)/g) || []
+        text = matches.map(m => m.slice(1,-1)).join(' ')
+          .replace(/\\n/g,'\n').replace(/\\r/g,'').replace(/\\\\/g,'\\')
+        if (text.length < 50) {
+          text = `[Arquivo PDF: ${file.name}]\n\nNota: O conteúdo deste PDF não pôde ser extraído automaticamente. Por favor, cole o texto do documento no campo de instrução.`
+        }
+      } catch { text = `[PDF: ${file.name}]` }
+      resolve(text)
+    }
+    reader.readAsBinaryString(file)
+  })
+}
+
+async function _extractDocxText(file) {
+  // Para DOCX, tentamos ler o XML interno
+  return new Promise((resolve) => {
+    const reader = new FileReader()
+    reader.onload = async (e) => {
+      try {
+        // DOCX é um ZIP — tentar extrair texto do word/document.xml
+        const arrayBuf = e.target.result
+        // Leitura simples: procurar padrões de texto no binário
+        const decoder = new TextDecoder('utf-8', { fatal: false })
+        const text = decoder.decode(arrayBuf)
+        // Extrai texto entre tags XML de parágrafo
+        const matches = text.match(/<w:t[^>]*>([^<]+)<\/w:t>/g) || []
+        const extracted = matches.map(m => m.replace(/<[^>]+>/g,'')).join(' ')
+        resolve(extracted.length > 30 ? extracted : `[Arquivo: ${file.name}]\n\nConteúdo não extraível automaticamente. Cole o texto no campo de instrução.`)
+      } catch {
+        resolve(`[Arquivo: ${file.name}]`)
+      }
+    }
+    reader.readAsArrayBuffer(file)
+  })
+}
+
+function clearUpload() {
+  _uploadedFile = null; _uploadedContent = ''
+  const nameEl = document.getElementById('upload-file-name')
+  if (nameEl) nameEl.style.display = 'none'
+  _analysisContent = ''
+  const resultEl = document.getElementById('analyze-result')
+  if (resultEl) resultEl.innerHTML = '<div class="doc-empty" style="padding:30px 0"><div class="doc-empty-icon">🔍</div><div style="font-size:14px;font-weight:600;color:var(--text)">Nenhuma análise realizada</div><div style="font-size:12px">Envie um arquivo e clique em Analisar com IA</div></div>'
+  const dlBar = document.getElementById('doc-result-toolbar-analyze')
+  if (dlBar) dlBar.style.display = 'none'
+}
+
+async function analyzeFile() {
+  const agentId = _activeAgentId
+  if (!agentId) return
+  if (!_uploadedFile || !_uploadedContent) { alert('Envie um arquivo primeiro'); return }
+
+  const instruction = document.getElementById('analyze-instruction')?.value.trim() || ''
+  const btn = document.getElementById('btn-analyze')
+  const resultEl = document.getElementById('analyze-result')
+  const dlBar = document.getElementById('doc-result-toolbar-analyze')
+
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Analisando...' }
+  if (dlBar) dlBar.style.display = 'none'
+  if (resultEl) resultEl.innerHTML = '<div style="padding:20px;color:var(--muted);font-size:13px"><i class="fas fa-spinner fa-spin"></i> Agente analisando o documento...</div>'
+
+  _analysisContent = ''
+
+  try {
+    const res = await fetch('/api/document/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        agentId,
+        fileContent: _uploadedContent,
+        fileName: _uploadedFile.name,
+        instruction
+      })
+    })
+
+    if (!res.ok) throw new Error('Erro ' + res.status)
+    if (!res.body) throw new Error('Stream indisponível')
+
+    if (resultEl) resultEl.innerHTML = ''
+
+    const reader  = res.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      const parts = buffer.split('\n\n')
+      buffer = parts.pop() || ''
+      for (const part of parts) {
+        for (const line of part.split('\n')) {
+          if (!line.startsWith('data:')) continue
+          const data = line.slice(5).trim()
+          if (data === '[DONE]') continue
+          try {
+            const json  = JSON.parse(data)
+            const chunk = json.response || json.choices?.[0]?.delta?.content || ''
+            if (chunk) {
+              _analysisContent += chunk
+              if (resultEl) {
+                resultEl.innerHTML = docMdToHtml(_analysisContent) +
+                  '<span style="display:inline-block;width:2px;height:1em;background:var(--secondary);animation:blink .7s infinite;vertical-align:text-bottom"></span>'
+                resultEl.scrollTop = resultEl.scrollHeight
+              }
+            }
+          } catch {}
+        }
+      }
+    }
+
+    if (resultEl) resultEl.innerHTML = docMdToHtml(_analysisContent)
+    if (dlBar) { dlBar.style.display = 'flex' }
+
+  } catch(err) {
+    if (resultEl) resultEl.innerHTML = `<div style="color:#F87171;padding:20px"><i class="fas fa-exclamation-circle"></i> Erro: ${escHtml(err.message)}</div>`
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-microscope"></i> Analisar com IA' }
+  }
+}
+
 
 // Listener global para perguntas rápidas do chat full-screen
 document.addEventListener('click', function(e) {

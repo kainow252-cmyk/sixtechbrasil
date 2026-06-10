@@ -812,6 +812,101 @@ app.post('/api/pipeline', async (c) => {
   })
 })
 
+// ── POST /api/document/generate ───────────────────────────────────────────
+// Gera um documento completo via IA (contrato, NDA, relatório, etc.)
+app.post('/api/document/generate', async (c) => {
+  const sess = getSession(c)
+  if (!sess) return c.json({ error: 'Não autorizado' }, 401)
+
+  const { agentId, docType, instructions, context } = await c.req.json() as {
+    agentId: string; docType: string; instructions: string; context?: string
+  }
+
+  const agent = AGENTS.find(a => a.id === agentId)
+  if (!agent) return c.json({ error: 'Agente não encontrado' }, 404)
+
+  const systemPrompt = `${agent.system}
+
+MODO: GERADOR DE DOCUMENTOS PROFISSIONAIS
+Você irá gerar um documento completo e profissional do tipo: ${docType}
+Instruções específicas: ${instructions}
+${context ? `Contexto adicional: ${context}` : ''}
+
+REGRAS OBRIGATÓRIAS:
+1. Gere o documento COMPLETO, não resumido
+2. Use formatação Markdown rica (## títulos, **negrito**, tabelas, listas)
+3. Inclua TODAS as seções necessárias para um documento profissional
+4. No início, coloque o título do documento em # TÍTULO
+5. Separe seções com --- quando necessário
+6. Para contratos/NDAs: inclua cláusulas numeradas, partes, objeto, vigência, assinaturas
+7. Responda APENAS com o documento, sem explicações antes ou depois`
+
+  const messages: ChatMessage[] = [
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: `Gere agora o documento: ${docType}\n\nInstruções: ${instructions}` }
+  ]
+
+  const stream = await (c.env.AI as any).run(agent.model, {
+    messages, max_tokens: 4096, stream: true
+  })
+
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'Access-Control-Allow-Origin': '*'
+    }
+  })
+})
+
+// ── POST /api/document/analyze ────────────────────────────────────────────
+// Analisa texto de documento enviado pelo usuário (conteúdo extraído no frontend)
+app.post('/api/document/analyze', async (c) => {
+  const sess = getSession(c)
+  if (!sess) return c.json({ error: 'Não autorizado' }, 401)
+
+  const { agentId, fileContent, fileName, instruction } = await c.req.json() as {
+    agentId: string; fileContent: string; fileName: string; instruction?: string
+  }
+
+  const agent = AGENTS.find(a => a.id === agentId)
+  if (!agent) return c.json({ error: 'Agente não encontrado' }, 404)
+
+  const systemPrompt = `${agent.system}
+
+MODO: ANÁLISE DE DOCUMENTO
+Analise criticamente o documento fornecido pelo usuário.
+${instruction ? `Instrução específica: ${instruction}` : ''}
+
+ESTRUTURA DA ANÁLISE (use Markdown):
+## 📋 Resumo Executivo
+## ✅ Pontos Positivos
+## ⚠️ Pontos de Atenção / Riscos
+## 🔧 Sugestões de Melhoria
+## 📝 Versão Corrigida (se aplicável — reescreva trechos problemáticos)
+## ✔️ Conclusão e Score (0-10)`
+
+  const userMsg = `Arquivo: ${fileName}\n\n--- CONTEÚDO DO DOCUMENTO ---\n${fileContent.slice(0, 12000)}\n--- FIM DO DOCUMENTO ---\n\n${instruction || 'Analise este documento e aponte melhorias, erros e ajustes necessários.'}`
+
+  const stream = await (c.env.AI as any).run(agent.model, {
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userMsg }
+    ],
+    max_tokens: 4096, stream: true
+  })
+
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'Access-Control-Allow-Origin': '*'
+    }
+  })
+})
+
 // ── POST /api/chat (streaming SSE — baseado no sixtechworkspace) ──────────
 app.post('/api/chat', async (c) => {
   const { messages, model } = await c.req.json() as { messages: ChatMessage[], model?: string }
@@ -1296,6 +1391,122 @@ select option{background:var(--card)}
 }
 #fc-send-btn:hover{opacity:.85}
 #fc-send-btn:disabled{opacity:.4;cursor:not-allowed}
+
+/* ── Abas do agente (Chat / Documento / Analisar) ─────────── */
+.fc-tabs{display:flex;gap:0;border-bottom:1px solid var(--border);flex-shrink:0;background:var(--surface)}
+.fc-tab{
+  padding:10px 18px;font-size:12px;font-weight:600;color:var(--muted);
+  cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;
+  display:flex;align-items:center;gap:7px;white-space:nowrap;
+}
+.fc-tab:hover{color:var(--text);background:rgba(108,99,255,.06)}
+.fc-tab.active{color:#fff;border-bottom-color:var(--primary);background:rgba(108,99,255,.08)}
+.fc-tab-panel{display:none;flex:1;flex-direction:column;overflow:hidden;min-height:0}
+.fc-tab-panel.active{display:flex}
+
+/* ── Painel Documento: gerar ──────────────────────────────── */
+.doc-gen-wrap{display:flex;flex-direction:column;height:100%;overflow:hidden}
+.doc-gen-form{
+  padding:18px 22px;border-bottom:1px solid var(--border);flex-shrink:0;
+  display:flex;flex-direction:column;gap:12px;background:var(--surface);
+}
+.doc-gen-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.doc-field label{display:block;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px}
+.doc-field input,.doc-field textarea,.doc-field select{
+  width:100%;background:var(--bg);border:1px solid var(--border);
+  color:var(--text);border-radius:9px;padding:9px 12px;
+  font-size:13px;font-family:inherit;resize:none;
+}
+.doc-field input:focus,.doc-field textarea:focus,.doc-field select:focus{
+  outline:none;border-color:var(--primary);box-shadow:0 0 0 2px rgba(108,99,255,.18)
+}
+.doc-types-grid{display:flex;flex-wrap:wrap;gap:6px}
+.doc-type-btn{
+  font-size:11px;padding:5px 11px;border-radius:8px;
+  background:var(--card);border:1px solid var(--border);
+  color:var(--muted);cursor:pointer;transition:all .15s;
+}
+.doc-type-btn:hover,.doc-type-btn.sel{background:rgba(108,99,255,.18);color:#fff;border-color:var(--primary)}
+.doc-gen-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.btn-gen-doc{
+  display:flex;align-items:center;gap:7px;padding:10px 18px;border-radius:10px;
+  background:linear-gradient(135deg,var(--primary),#4f46e5);color:#fff;
+  border:none;font-size:13px;font-weight:700;cursor:pointer;transition:opacity .15s;
+}
+.btn-gen-doc:hover{opacity:.88}
+.btn-gen-doc:disabled{opacity:.45;cursor:not-allowed}
+
+/* ── Resultado do documento gerado ───────────────────────── */
+.doc-result-wrap{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0}
+.doc-result-toolbar{
+  display:flex;align-items:center;gap:8px;padding:10px 18px;
+  border-bottom:1px solid var(--border);flex-shrink:0;
+  background:var(--surface);flex-wrap:wrap;
+}
+.doc-result-title{font-size:13px;font-weight:700;color:#fff;flex:1}
+.btn-dl{
+  display:flex;align-items:center;gap:6px;padding:7px 13px;border-radius:9px;
+  font-size:12px;font-weight:600;cursor:pointer;border:none;transition:all .15s;
+}
+.btn-dl-pdf{background:rgba(239,68,68,.15);color:#F87171;border:1px solid rgba(239,68,68,.3)}
+.btn-dl-pdf:hover{background:rgba(239,68,68,.28);color:#fff}
+.btn-dl-word{background:rgba(59,130,246,.15);color:#60A5FA;border:1px solid rgba(59,130,246,.3)}
+.btn-dl-word:hover{background:rgba(59,130,246,.28);color:#fff}
+.btn-dl-txt{background:rgba(52,211,153,.12);color:#34D399;border:1px solid rgba(52,211,153,.25)}
+.btn-dl-txt:hover{background:rgba(52,211,153,.22);color:#fff}
+.btn-copy-doc{background:var(--card);color:var(--muted);border:1px solid var(--border)}
+.btn-copy-doc:hover{color:#fff;background:var(--border)}
+.doc-preview{
+  flex:1;overflow-y:auto;padding:22px 28px;
+  font-size:13px;line-height:1.75;color:var(--text);
+}
+.doc-preview h1{font-size:1.3rem;font-weight:800;color:#fff;margin:0 0 16px;text-align:center;border-bottom:2px solid var(--primary);padding-bottom:10px}
+.doc-preview h2{font-size:1rem;font-weight:700;color:#a5b4fc;margin:18px 0 8px}
+.doc-preview h3{font-size:.9rem;font-weight:600;color:#22D3EE;margin:14px 0 6px}
+.doc-preview strong{color:#fff}
+.doc-preview hr{border:none;border-top:1px solid var(--border);margin:18px 0}
+.doc-preview pre{background:#0d0d1a;border:1px solid var(--border);border-radius:8px;padding:12px;overflow-x:auto;margin:8px 0}
+.doc-preview code{color:#f472b6;font-family:monospace;font-size:12px}
+.doc-preview blockquote{border-left:3px solid var(--primary);padding-left:12px;color:var(--muted);margin:8px 0}
+.doc-preview table{width:100%;border-collapse:collapse;margin:10px 0}
+.doc-preview th{background:var(--card);padding:8px 12px;text-align:left;font-size:12px;color:#a5b4fc;border:1px solid var(--border)}
+.doc-preview td{padding:7px 12px;font-size:12px;border:1px solid var(--border)}
+.doc-preview li{margin:3px 0;padding-left:4px}
+.doc-empty{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  flex:1;gap:12px;color:var(--muted);padding:40px;text-align:center;
+}
+.doc-empty-icon{font-size:48px;opacity:.4}
+.doc-streaming{padding:22px 28px;font-size:13px;line-height:1.75;color:var(--text);overflow-y:auto;flex:1}
+
+/* ── Painel Analisar arquivo ──────────────────────────────── */
+.analyze-wrap{display:flex;flex-direction:column;height:100%;overflow:hidden}
+.upload-zone{
+  margin:18px 22px 0;border:2px dashed var(--border);border-radius:14px;
+  padding:28px;text-align:center;cursor:pointer;transition:all .2s;flex-shrink:0;
+  background:var(--card);
+}
+.upload-zone:hover,.upload-zone.drag-over{border-color:var(--primary);background:rgba(108,99,255,.07)}
+.upload-zone-icon{font-size:36px;margin-bottom:8px;opacity:.6}
+.upload-zone-txt{font-size:13px;color:var(--muted)}
+.upload-zone-sub{font-size:11px;color:var(--muted);margin-top:4px;opacity:.7}
+.upload-file-name{
+  margin:10px 22px 0;padding:10px 14px;background:rgba(108,99,255,.1);
+  border:1px solid rgba(108,99,255,.25);border-radius:10px;
+  display:none;align-items:center;gap:10px;font-size:13px;color:#a5b4fc;flex-shrink:0;
+}
+.upload-file-name i{font-size:18px}
+.analyze-instruction{padding:12px 22px;flex-shrink:0}
+.analyze-instruction textarea{height:56px;resize:none;font-size:12px}
+.analyze-actions{padding:0 22px 14px;flex-shrink:0;display:flex;gap:8px}
+.btn-analyze{
+  display:flex;align-items:center;gap:7px;padding:10px 18px;border-radius:10px;
+  background:linear-gradient(135deg,#059669,#10b981);color:#fff;
+  border:none;font-size:13px;font-weight:700;cursor:pointer;transition:opacity .15s;
+}
+.btn-analyze:hover{opacity:.88}
+.btn-analyze:disabled{opacity:.45;cursor:not-allowed}
+.analyze-result{flex:1;overflow-y:auto;padding:18px 22px;min-height:0}
 </style>
 </head>
 <body>
@@ -1438,48 +1649,34 @@ select option{background:var(--card)}
 
     <!-- ══ TAB: CHAT ══════════════════════════════════════════ -->
     <div id="tab-chat" class="tab-panel">
-      <div class="grid-chat">
-        <div class="col-left">
-          <div class="card">
-            <div class="card-title"><i class="fas fa-microchip" style="color:var(--primary)"></i> Modelo</div>
-            <select id="chat-model"></select>
-            <div style="margin-top:10px">
-              <div style="font-size:11px;color:var(--muted);margin-bottom:5px">Agente Especialista</div>
-              <select id="chat-agent"><option value="">Nenhum (chat livre)</option></select>
-            </div>
+      <div class="chat-box" style="height:calc(100vh - var(--header-h) - 40px)">
+        <div class="chat-hdr">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:16px">💬</span>
+            <span style="font-weight:600;font-size:14px;color:#fff">Chat Livre com IA</span>
           </div>
-          <div class="card">
-            <div class="card-title" style="justify-content:space-between">
-              <span><i class="fas fa-clock-rotate-left" style="color:var(--secondary)"></i> Histórico</span>
-              <button class="btn btn-ghost" style="padding:3px 8px;font-size:11px" onclick="clearChat()">Limpar</button>
-            </div>
-            <div id="chat-history-list" style="font-size:11px;color:var(--muted);text-align:center;padding:12px 0">Nenhuma conversa</div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <select id="chat-model" style="background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:4px 10px;font-size:11px;outline:none"></select>
+            <button class="btn btn-ghost" style="padding:5px 10px;font-size:11px" onclick="clearChat()">
+              <i class="fas fa-trash-alt"></i> Limpar
+            </button>
           </div>
         </div>
-        <div class="chat-box">
-          <div class="chat-hdr">
-            <div style="display:flex;align-items:center;gap:8px">
-              <span style="font-size:16px">💬</span>
-              <span style="font-weight:600;font-size:14px;color:#fff">Chat com IA</span>
-            </div>
-            <span id="chat-model-badge" class="badge badge-cf">Llama 3.1 8B</span>
+        <div id="chat-messages" class="chat-msgs">
+          <div class="msg msg-ai">
+            <div class="msg-name ai">🤖 Assistente SixTech</div>
+            <div>Olá! Sou o assistente da <strong>SixTech Brasil</strong>, powered by Cloudflare Workers AI. Como posso ajudar você hoje?</div>
           </div>
-          <div id="chat-messages" class="chat-msgs">
-            <div class="msg msg-ai">
-              <div class="msg-name ai">🤖 Assistente SixTech</div>
-              <div>Olá! Sou o assistente da <strong>SixTech Brasil</strong>, powered by Cloudflare Workers AI. Como posso ajudar você hoje?</div>
-            </div>
-          </div>
-          <div id="typing-indicator"><span class="typing-dot"></span>IA digitando...</div>
-          <div class="chat-input-row">
-            <textarea id="chat-input" placeholder="Digite sua mensagem... (Enter para enviar)"
-              onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat()}"></textarea>
+        </div>
+        <div id="typing-indicator"><span class="typing-dot"></span>IA digitando...</div>
+        <div class="chat-input-row">
+          <textarea id="chat-input" placeholder="Digite sua mensagem... (Enter para enviar)"
+            onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat()}"></textarea>
             <button class="btn btn-primary btn-icon" onclick="sendChat()" id="chat-send-btn" style="height:60px;padding:0 16px">
               <i class="fas fa-paper-plane"></i>
             </button>
           </div>
         </div>
-      </div>
     </div>
 
     <!-- ══ TAB: STATUS ═════════════════════════════════════════ -->
@@ -1506,7 +1703,7 @@ select option{background:var(--card)}
             <div id="fc-agent-caps" class="fc-hdr-caps"></div>
           </div>
           <div class="fc-hdr-actions">
-            <button class="fc-clear-btn" onclick="fcClear()" title="Limpar conversa">
+            <button class="fc-clear-btn" id="fc-clear-btn" onclick="fcClear()" title="Limpar">
               <i class="fas fa-trash-alt"></i> Limpar
             </button>
             <button class="fc-back-btn" onclick="showHome(null)" title="Voltar ao início">
@@ -1515,32 +1712,164 @@ select option{background:var(--card)}
           </div>
         </div>
 
-        <!-- Corpo do chat -->
-        <div class="fc-body">
-
-          <!-- Mensagens -->
-          <div id="fc-msgs" class="fc-msgs"></div>
-
-          <!-- Indicador de digitação -->
-          <div id="fc-typing" class="fc-typing">
-            <span class="typing-dot"></span>
-            <span>Agente digitando...</span>
+        <!-- Abas: Chat | Gerar Documento | Analisar Arquivo -->
+        <div class="fc-tabs" id="fc-tabs">
+          <div class="fc-tab active" data-tab="chat" onclick="switchFcTab('chat',this)">
+            <i class="fas fa-comments"></i> Chat
           </div>
-
-          <!-- Perguntas rápidas -->
-          <div id="fc-quick" class="fc-quick"></div>
-
-          <!-- Input row -->
-          <div class="fc-input-row">
-            <textarea id="fc-input"
-              placeholder="Digite sua mensagem... (Enter para enviar)"
-              onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();fcSend()}"></textarea>
-            <button id="fc-send-btn" onclick="fcSend()" title="Enviar">
-              <i class="fas fa-paper-plane"></i>
-            </button>
+          <div class="fc-tab" data-tab="doc" onclick="switchFcTab('doc',this)">
+            <i class="fas fa-file-alt"></i> Gerar Documento
           </div>
+          <div class="fc-tab" data-tab="analyze" onclick="switchFcTab('analyze',this)">
+            <i class="fas fa-search"></i> Analisar Arquivo
+          </div>
+        </div>
 
-        </div><!-- /.fc-body -->
+        <!-- ── ABA: CHAT ─────────────────────────────────────── -->
+        <div id="fc-panel-chat" class="fc-tab-panel active">
+          <div class="fc-body">
+            <div id="fc-msgs" class="fc-msgs"></div>
+            <div id="fc-typing" class="fc-typing">
+              <span class="typing-dot"></span>
+              <span>Agente digitando...</span>
+            </div>
+            <div id="fc-quick" class="fc-quick"></div>
+            <div class="fc-input-row">
+              <textarea id="fc-input"
+                placeholder="Digite sua mensagem... (Enter para enviar)"
+                onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();fcSend()}"></textarea>
+              <button id="fc-send-btn" onclick="fcSend()" title="Enviar">
+                <i class="fas fa-paper-plane"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── ABA: GERAR DOCUMENTO ──────────────────────────── -->
+        <div id="fc-panel-doc" class="fc-tab-panel">
+          <div class="doc-gen-wrap">
+
+            <!-- Formulário de geração -->
+            <div class="doc-gen-form">
+              <div>
+                <div class="doc-field" style="margin-bottom:8px">
+                  <label>Tipo de Documento</label>
+                  <div class="doc-types-grid" id="doc-types-grid"></div>
+                </div>
+                <div class="doc-gen-row">
+                  <div class="doc-field">
+                    <label>Ou descreva o tipo</label>
+                    <input type="text" id="doc-type-input" placeholder="Ex: Contrato de Prestação de Serviços">
+                  </div>
+                  <div class="doc-field">
+                    <label>Partes envolvidas</label>
+                    <input type="text" id="doc-parties" placeholder="Ex: Empresa A e Empresa B">
+                  </div>
+                </div>
+                <div class="doc-field">
+                  <label>Instruções específicas</label>
+                  <textarea id="doc-instructions" rows="2"
+                    placeholder="Descreva detalhes, cláusulas especiais, valores, prazos, condições..."></textarea>
+                </div>
+              </div>
+              <div class="doc-gen-actions">
+                <button class="btn-gen-doc" id="btn-gen-doc" onclick="generateDocument()">
+                  <i class="fas fa-magic"></i> Gerar Documento com IA
+                </button>
+                <span id="doc-gen-status" style="font-size:12px;color:var(--muted)"></span>
+              </div>
+            </div>
+
+            <!-- Resultado + toolbar de download -->
+            <div class="doc-result-wrap" id="doc-result-wrap">
+              <div class="doc-result-toolbar" id="doc-result-toolbar" style="display:none">
+                <span class="doc-result-title" id="doc-result-title">Documento Gerado</span>
+                <button class="btn-dl btn-copy-doc" onclick="copyDocument()" title="Copiar">
+                  <i class="fas fa-copy"></i> Copiar
+                </button>
+                <button class="btn-dl btn-dl-txt" onclick="downloadDoc('txt')" title="Baixar TXT">
+                  <i class="fas fa-file-alt"></i> TXT
+                </button>
+                <button class="btn-dl btn-dl-word" onclick="downloadDoc('word')" title="Baixar Word">
+                  <i class="fas fa-file-word"></i> Word
+                </button>
+                <button class="btn-dl btn-dl-pdf" onclick="downloadDoc('pdf')" title="Baixar PDF">
+                  <i class="fas fa-file-pdf"></i> PDF
+                </button>
+              </div>
+              <div id="doc-preview-area" class="doc-preview doc-empty">
+                <div class="doc-empty-icon">📄</div>
+                <div style="font-size:14px;font-weight:600;color:var(--text)">Nenhum documento gerado</div>
+                <div style="font-size:12px">Preencha o formulário acima e clique em <strong>Gerar Documento com IA</strong></div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- ── ABA: ANALISAR ARQUIVO ─────────────────────────── -->
+        <div id="fc-panel-analyze" class="fc-tab-panel">
+          <div class="analyze-wrap">
+
+            <!-- Upload zone -->
+            <div class="upload-zone" id="upload-zone"
+              onclick="document.getElementById('file-input').click()"
+              ondragover="event.preventDefault();this.classList.add('drag-over')"
+              ondragleave="this.classList.remove('drag-over')"
+              ondrop="handleFileDrop(event)">
+              <div class="upload-zone-icon">📎</div>
+              <div class="upload-zone-txt">Clique ou arraste seu arquivo aqui</div>
+              <div class="upload-zone-sub">PDF · DOCX · TXT · até 5 MB</div>
+            </div>
+            <input type="file" id="file-input" accept=".pdf,.doc,.docx,.txt,.md"
+              style="display:none" onchange="handleFileSelect(this)">
+
+            <!-- Nome do arquivo carregado -->
+            <div class="upload-file-name" id="upload-file-name">
+              <i class="fas fa-file-check"></i>
+              <span id="upload-file-label">arquivo.pdf</span>
+              <button onclick="clearUpload()" style="margin-left:auto;background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px">✕</button>
+            </div>
+
+            <!-- Instrução para análise -->
+            <div class="analyze-instruction">
+              <div class="doc-field">
+                <label>Instrução para análise (opcional)</label>
+                <textarea id="analyze-instruction"
+                  placeholder="Ex: Identifique cláusulas abusivas, verifique conformidade com a LGPD, sugira melhorias..."></textarea>
+              </div>
+            </div>
+
+            <!-- Botão analisar -->
+            <div class="analyze-actions">
+              <button class="btn-analyze" id="btn-analyze" onclick="analyzeFile()">
+                <i class="fas fa-microscope"></i> Analisar com IA
+              </button>
+              <div id="doc-result-toolbar-analyze" style="display:none;gap:8px;display:none;align-items:center">
+                <button class="btn-dl btn-dl-txt" onclick="downloadAnalysis('txt')">
+                  <i class="fas fa-file-alt"></i> TXT
+                </button>
+                <button class="btn-dl btn-dl-word" onclick="downloadAnalysis('word')">
+                  <i class="fas fa-file-word"></i> Word
+                </button>
+                <button class="btn-dl btn-dl-pdf" onclick="downloadAnalysis('pdf')">
+                  <i class="fas fa-file-pdf"></i> PDF
+                </button>
+              </div>
+            </div>
+
+            <!-- Resultado da análise -->
+            <div id="analyze-result" class="analyze-result">
+              <div class="doc-empty" style="padding:30px 0">
+                <div class="doc-empty-icon">🔍</div>
+                <div style="font-size:14px;font-weight:600;color:var(--text)">Nenhuma análise realizada</div>
+                <div style="font-size:12px">Envie um arquivo acima e clique em <strong>Analisar com IA</strong></div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
       </div><!-- /.fc-wrap -->
     </div><!-- /#tab-agent-chat -->
 
