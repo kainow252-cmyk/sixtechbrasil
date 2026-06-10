@@ -1,8 +1,8 @@
 // SixTech MAS v3.0 — Frontend App
 // Estado global
 let allAgents = [], models = [], chatHistory = []
-let currentCategory = null
-let _inlineSessions = {}   // agentId -> { history: [], streaming: false }
+let _activeAgentId = null          // agente aberto no painel direito
+let _inlineSessions = {}           // agentId -> { history, streaming }
 
 // ── Categorias: ícone e cor
 const CAT_META = {
@@ -62,10 +62,8 @@ async function init() {
     const [agentsRes, modelsRes] = await Promise.all([
       fetch('/api/agents'), fetch('/api/models')
     ])
-    const agentsData = await agentsRes.json()
-    const modelsData = await modelsRes.json()
-    allAgents = agentsData.agents
-    models = modelsData.models
+    allAgents = (await agentsRes.json()).agents
+    models    = (await modelsRes.json()).models
 
     renderSidebarCategories()
     renderHomeCats()
@@ -79,102 +77,146 @@ async function init() {
   }
 }
 
-// ── Sidebar: categorias como links diretos (sem sub-itens)
+// ════════════════════════════════════════════════════════════
+// SIDEBAR — accordion com sub-agentes + clique abre chat full
+// ════════════════════════════════════════════════════════════
 function renderSidebarCategories() {
   const container = document.getElementById('sidebar-categories')
   if (!container) return
 
+  // Agrupar por categoria respeitando ordem do CAT_META
   const groups = {}
   for (const cat of Object.keys(CAT_META)) {
     const list = allAgents.filter(a => a.category === cat)
     if (list.length > 0) groups[cat] = list
   }
-  // Categorias não mapeadas no CAT_META
   for (const a of allAgents) {
     if (!groups[a.category]) groups[a.category] = allAgents.filter(x => x.category === a.category)
   }
 
   container.innerHTML = Object.entries(groups).map(([cat, list]) => {
     const meta = CAT_META[cat] || { icon: '🤖', color: '#6C63FF' }
+
+    // Sub-itens dos agentes
+    const items = list.map(a => `
+      <div class="sb-agent-item" data-agent-id="${a.id}">
+        <span class="sb-ag-emoji">${a.emoji}</span>
+        <span class="sb-ag-name">${a.name}</span>
+        <span class="sb-ag-badge ${a.source === 'hybrid' ? 'badge-hybrid' : 'badge-cf'}">${a.source === 'hybrid' ? '⚡' : '☁️'}</span>
+      </div>`
+    ).join('')
+
     return `
-      <div class="cat-header" data-cat="${encodeURIComponent(cat)}">
-        <span class="cat-icon" style="background:${meta.color}22">${meta.icon}</span>
-        <span class="cat-name">${cat}</span>
-        <span class="cat-count">${list.length}</span>
+      <div class="sb-cat-group">
+        <div class="sb-cat-header" data-cat="${encodeURIComponent(cat)}">
+          <span class="sb-cat-icon" style="background:${meta.color}22">${meta.icon}</span>
+          <span class="sb-cat-name">${cat}</span>
+          <span class="sb-cat-count">${list.length}</span>
+          <span class="sb-cat-arrow">›</span>
+        </div>
+        <div class="sb-cat-agents">
+          ${items}
+        </div>
       </div>`
   }).join('')
 
-  // Event delegation — zero onclick inline
+  // Delegação: clique no header expande; clique no item abre chat full
   container.addEventListener('click', function(e) {
-    const header = e.target.closest('.cat-header')
-    if (header) {
-      const cat = decodeURIComponent(header.dataset.cat)
-      openCategoryScreen(cat, header)
+    // ── header: toggle accordion
+    const hdr = e.target.closest('.sb-cat-header')
+    if (hdr) {
+      e.stopPropagation()
+      const cat = decodeURIComponent(hdr.dataset.cat)
+      _toggleSidebarCat(hdr, cat)
+      return
+    }
+    // ── item: abrir chat full-screen
+    const item = e.target.closest('.sb-agent-item')
+    if (item) {
+      e.stopPropagation()
+      const id = item.dataset.agentId
+      openAgentFullChat(id, item)
     }
   })
 }
 
-// ── Home: grid de categorias
-function renderHomeCats() {
-  const grid = document.getElementById('cats-grid')
-  if (!grid) return
+// Toggle accordion da categoria na sidebar
+function _toggleSidebarCat(hdrEl, cat) {
+  const agentsEl = hdrEl.nextElementSibling  // .sb-cat-agents
+  const isOpen = agentsEl.classList.contains('open')
 
-  const groups = {}
-  for (const cat of Object.keys(CAT_META)) {
-    const list = allAgents.filter(a => a.category === cat)
-    if (list.length > 0) groups[cat] = list
+  // Fechar todos
+  document.querySelectorAll('.sb-cat-agents').forEach(el => el.classList.remove('open'))
+  document.querySelectorAll('.sb-cat-header').forEach(el => el.classList.remove('open'))
+
+  if (!isOpen) {
+    agentsEl.classList.add('open')
+    hdrEl.classList.add('open')
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+// CHAT FULL-SCREEN — ocupa toda a área direita
+// ════════════════════════════════════════════════════════════
+function openAgentFullChat(id, sidebarItemEl) {
+  const agent = allAgents.find(a => a.id === id)
+  if (!agent) return
+  _activeAgentId = id
+
+  // Marcar item ativo na sidebar
+  document.querySelectorAll('.sb-agent-item').forEach(el => el.classList.remove('active'))
+  if (sidebarItemEl) sidebarItemEl.classList.add('active')
+  else {
+    const el = document.querySelector(`.sb-agent-item[data-agent-id="${id}"]`)
+    if (el) el.classList.add('active')
   }
 
-  grid.innerHTML = Object.entries(groups).map(([cat, list]) => {
-    const meta = CAT_META[cat] || { icon: '🤖', color: '#6C63FF' }
-    return `
-      <div class="cat-card anim-in" onclick="_openCatFromCard('${encodeURIComponent(cat)}')">
-        <div class="cat-card-icon" style="background:${meta.color}22">${meta.icon}</div>
-        <div class="cat-card-name">${cat}</div>
-        <div class="cat-card-count">${list.length} agente${list.length !== 1 ? 's' : ''}</div>
-      </div>`
-  }).join('')
-}
-
-function _openCatFromCard(encodedCat) {
-  const cat = decodeURIComponent(encodedCat)
-  openCategoryScreen(cat, null)
-}
-
-// ── Abrir tela de agentes de uma categoria
-function openCategoryScreen(cat, sidebarEl) {
-  currentCategory = cat
-  const meta = CAT_META[cat] || { icon: '🤖', color: '#6C63FF' }
-  const list = allAgents.filter(a => a.category === cat)
-
-  // Atualizar header da tela de agentes
-  const iconEl = document.getElementById('agents-screen-icon')
-  const titleEl = document.getElementById('agents-screen-title')
-  const subEl = document.getElementById('agents-screen-sub')
-  if (iconEl) { iconEl.textContent = meta.icon; iconEl.style.background = meta.color + '22' }
-  if (titleEl) titleEl.textContent = cat
-  if (subEl) subEl.textContent = `${list.length} agente${list.length !== 1 ? 's' : ''} especializados disponíveis`
-
-  // Limpar busca
-  const searchEl = document.getElementById('agent-search')
-  if (searchEl) searchEl.value = ''
-
-  // Renderizar cards
-  renderAgentsGrid(list)
-
-  // Ativar tab-agents
+  // Ativar painel de chat full-screen
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'))
   document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'))
-  const panel = document.getElementById('tab-agents')
+  const panel = document.getElementById('tab-agent-chat')
   if (panel) panel.classList.add('active')
 
-  // Destacar categoria ativa na sidebar
-  document.querySelectorAll('.cat-header').forEach(el => el.classList.remove('active-cat'))
-  if (sidebarEl) sidebarEl.classList.add('active-cat')
-  else {
-    const target = document.querySelector(`.cat-header[data-cat="${encodeURIComponent(cat)}"]`)
-    if (target) target.classList.add('active-cat')
+  // Garantir sessão
+  if (!_inlineSessions[id]) _inlineSessions[id] = { history: [], streaming: false }
+
+  // Preencher header
+  const meta = CAT_META[agent.category] || { color: '#6C63FF' }
+  const iconEl = document.getElementById('fc-agent-icon')
+  const nameEl = document.getElementById('fc-agent-name')
+  const subEl  = document.getElementById('fc-agent-sub')
+  const capsEl = document.getElementById('fc-agent-caps')
+
+  if (iconEl) { iconEl.textContent = agent.emoji; iconEl.style.background = agent.color + '33' }
+  if (nameEl) nameEl.textContent = agent.name
+  if (subEl)  subEl.textContent  = agent.category + ' · ' + (agent.model || '').split('/').pop()
+  if (capsEl) capsEl.innerHTML   = (agent.capabilities || []).map(c => `<span class="cap-pill">${c}</span>`).join('')
+
+  // Perguntas rápidas
+  const qq = QUICK_QUESTIONS[agent.category] || QUICK_QUESTIONS['Orquestração'] || []
+  const quickEl = document.getElementById('fc-quick')
+  if (quickEl) {
+    quickEl.innerHTML = qq.map(q =>
+      `<button class="fc-qbtn" data-agent-id="${id}" data-q="${escHtml(q)}">${q}</button>`
+    ).join('')
   }
+
+  // Mensagens: recarregar histórico ou boas-vindas
+  const msgsEl = document.getElementById('fc-msgs')
+  if (msgsEl) {
+    if (_inlineSessions[id].history.length === 0) {
+      msgsEl.innerHTML = `
+        <div class="fc-msg ai">
+          <div class="fc-mn ai">${agent.emoji} ${agent.name}</div>
+          <div>Olá! Sou o <strong>${agent.name}</strong>. ${agent.desc}<br><br>Como posso ajudar você hoje?</div>
+        </div>`
+    }
+    msgsEl.scrollTop = msgsEl.scrollHeight
+  }
+
+  // Limpar input
+  const inputEl = document.getElementById('fc-input')
+  if (inputEl) { inputEl.value = ''; setTimeout(() => inputEl.focus(), 80) }
 
   // Fechar sidebar no mobile
   if (window.innerWidth <= 540) {
@@ -187,144 +229,14 @@ function openCategoryScreen(cat, sidebarEl) {
   }
 }
 
-// ── Voltar para Home
-function showHome(el) {
-  currentCategory = null
-  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'))
-  document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'))
-  const panel = document.getElementById('tab-home')
-  if (panel) panel.classList.add('active')
-  document.querySelectorAll('.cat-header').forEach(el => el.classList.remove('active-cat'))
-  const navHome = document.getElementById('nav-home')
-  if (navHome) navHome.classList.add('active')
-  if (el) el.classList.add('active')
-}
+// Enviar mensagem no chat full-screen
+async function fcSend() {
+  const id = _activeAgentId
+  if (!id) return
+  const session = _inlineSessions[id]
+  if (!session || session.streaming) return
 
-// ── Tabs (Chat, Status)
-function showTab(name, el) {
-  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'))
-  document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'))
-  document.querySelectorAll('.cat-header').forEach(c => c.classList.remove('active-cat'))
-  const panel = document.getElementById('tab-' + name)
-  if (panel) panel.classList.add('active')
-  if (el) el.classList.add('active')
-  if (window.innerWidth <= 540) {
-    const s = document.getElementById('sidebar')
-    const o = document.getElementById('sidebar-overlay')
-    if (s && !s.classList.contains('collapsed')) {
-      s.classList.add('collapsed')
-      if (o) o.style.display = 'none'
-    }
-  }
-}
-
-// ── Render grid de agentes com inline chat
-function renderAgentsGrid(list) {
-  if (!list) list = allAgents
-  const grid = document.getElementById('agents-grid')
-  if (!grid) return
-
-  if (!list.length) {
-    grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--muted)">Nenhum agente encontrado</div>'
-    return
-  }
-
-  grid.innerHTML = list.map(a => {
-    const qq = QUICK_QUESTIONS[a.category] || QUICK_QUESTIONS['Orquestração'] || []
-    const quickBtns = qq.map(q =>
-      `<button class="inline-qbtn" data-agent-id="${a.id}" data-q="${escHtml(q)}">${q}</button>`
-    ).join('')
-
-    return `
-    <div class="agent-card anim-in" id="card-${a.id}">
-      <div class="agent-card-top">
-        <div class="agent-card-hdr">
-          <div class="agent-icon" style="background:${a.color}33">${a.emoji}</div>
-          <div style="flex:1;min-width:0">
-            <div class="agent-card-name">${a.name}</div>
-            <div class="agent-card-cat">${a.category}</div>
-          </div>
-          <span class="badge ${a.source === 'hybrid' ? 'badge-hybrid' : 'badge-cf'}">${a.source === 'hybrid' ? '⚡ hybrid' : '☁️ cf'}</span>
-        </div>
-        <div class="agent-card-desc">${a.desc}</div>
-        <div class="caps">${(a.capabilities || []).map(c => `<span class="cap-pill">${c}</span>`).join('')}</div>
-        ${a.basedOn ? `<div style="font-size:10px;color:#6B7280;margin-top:6px">📦 <span style="color:#a5b4fc">${a.basedOn}</span></div>` : ''}
-      </div>
-      <button class="agent-card-btn" id="btn-${a.id}" onclick="toggleInlineChat('${a.id}')">
-        <i class="fas fa-comments"></i> Conversar com ${a.name.split(' ')[0]}
-      </button>
-      <div class="inline-chat" id="inline-${a.id}">
-        <div class="inline-chat-hdr">
-          <span>${a.emoji} ${a.name}</span>
-          <button onclick="toggleInlineChat('${a.id}')" title="Fechar">✕</button>
-        </div>
-        <div class="inline-msgs" id="msgs-${a.id}">
-          <div class="inline-msg ai">
-            <div class="mn ai">${a.emoji} ${a.name}</div>
-            <div>Olá! Sou o <strong>${a.name}</strong>. ${a.desc}<br>Como posso ajudar?</div>
-          </div>
-        </div>
-        <div class="inline-typing" id="typing-${a.id}">
-          <span style="display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--secondary);animation:pulse 1s infinite;margin-right:4px"></span>digitando...
-        </div>
-        <div class="inline-quick">${quickBtns}</div>
-        <div class="inline-input-row">
-          <textarea id="input-${a.id}" placeholder="Digite aqui... (Enter para enviar)"
-            onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();inlineSend('${a.id}')}"></textarea>
-          <button class="inline-send-btn" id="sbtn-${a.id}" onclick="inlineSend('${a.id}')">
-            <i class="fas fa-paper-plane"></i>
-          </button>
-        </div>
-      </div>
-    </div>`
-  }).join('')
-
-  // Delegação para botões rápidos
-  grid.addEventListener('click', function(e) {
-    const qbtn = e.target.closest('.inline-qbtn')
-    if (qbtn) {
-      const id = qbtn.dataset.agentId
-      const q = qbtn.dataset.q
-      const inp = document.getElementById('input-' + id)
-      if (inp) { inp.value = q; inlineSend(id) }
-    }
-  })
-}
-
-// ── Toggle painel inline de chat
-function toggleInlineChat(id) {
-  const panel = document.getElementById('inline-' + id)
-  const btn = document.getElementById('btn-' + id)
-  if (!panel) return
-  const isOpen = panel.classList.contains('open')
-
-  // Fechar outros abertos na mesma grid
-  document.querySelectorAll('.inline-chat.open').forEach(el => {
-    el.classList.remove('open')
-    const otherId = el.id.replace('inline-', '')
-    const otherBtn = document.getElementById('btn-' + otherId)
-    if (otherBtn) otherBtn.classList.remove('active')
-  })
-
-  if (!isOpen) {
-    panel.classList.add('open')
-    if (btn) btn.classList.add('active')
-    // Inicializar sessão se ainda não existe
-    if (!_inlineSessions[id]) _inlineSessions[id] = { history: [], streaming: false }
-    setTimeout(() => {
-      const inp = document.getElementById('input-' + id)
-      if (inp) inp.focus()
-      panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
-    }, 60)
-  }
-}
-
-// ── Enviar mensagem no chat inline
-async function inlineSend(id) {
-  const session = _inlineSessions[id] || (_inlineSessions[id] = { history: [], streaming: false })
-  if (session.streaming) return
-
-  const input = document.getElementById('input-' + id)
+  const input = document.getElementById('fc-input')
   const msg = input ? input.value.trim() : ''
   if (!msg) return
 
@@ -332,24 +244,23 @@ async function inlineSend(id) {
   const agent = allAgents.find(a => a.id === id)
   if (!agent) return
 
-  const msgsEl = document.getElementById('msgs-' + id)
-  const typingEl = document.getElementById('typing-' + id)
-  const sendBtn = document.getElementById('sbtn-' + id)
+  const msgsEl  = document.getElementById('fc-msgs')
+  const typingEl = document.getElementById('fc-typing')
+  const sendBtn  = document.getElementById('fc-send-btn')
 
-  // Adicionar mensagem do usuário
-  _inlineAppendMsg(msgsEl, 'user', escHtml(msg), '👤 Você')
+  _fcAppendMsg('user', escHtml(msg), '👤 Você')
   session.history.push({ role: 'user', content: msg })
 
   session.streaming = true
   if (sendBtn) sendBtn.disabled = true
-  if (typingEl) typingEl.style.display = 'block'
+  if (typingEl) typingEl.style.display = 'flex'
 
-  // Criar div da resposta streaming
+  // Div da resposta streaming
   const aiEl = document.createElement('div')
-  aiEl.className = 'inline-msg ai'
-  aiEl.innerHTML = `<div class="mn ai">${agent.emoji} ${agent.name}</div><div class="stream-txt"></div>`
+  aiEl.className = 'fc-msg ai'
+  aiEl.innerHTML = `<div class="fc-mn ai">${agent.emoji} ${agent.name}</div><div class="fc-stream"></div>`
   msgsEl.appendChild(aiEl)
-  const streamDiv = aiEl.querySelector('.stream-txt')
+  const streamDiv = aiEl.querySelector('.fc-stream')
   msgsEl.scrollTop = msgsEl.scrollHeight
 
   let fullText = ''
@@ -359,10 +270,7 @@ async function inlineSend(id) {
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        messages: [sysMsg, ...session.history],
-        model: agent.model
-      })
+      body: JSON.stringify({ messages: [sysMsg, ...session.history], model: agent.model })
     })
 
     if (typingEl) typingEl.style.display = 'none'
@@ -387,7 +295,8 @@ async function inlineSend(id) {
               const chunk = json.response || (json.choices?.[0]?.delta?.content) || ''
               if (chunk) {
                 fullText += chunk
-                streamDiv.innerHTML = mdToHtml(fullText) + '<span style="display:inline-block;width:2px;height:1em;background:var(--secondary);animation:blink .7s infinite;vertical-align:text-bottom;margin-left:2px"></span>'
+                streamDiv.innerHTML = mdToHtml(fullText) +
+                  '<span style="display:inline-block;width:2px;height:1em;background:var(--secondary);animation:blink .7s infinite;vertical-align:text-bottom;margin-left:2px"></span>'
                 msgsEl.scrollTop = msgsEl.scrollHeight
               }
             } catch {}
@@ -398,6 +307,7 @@ async function inlineSend(id) {
     } else {
       const data = await res.json()
       fullText = data.response || data.content || 'Sem resposta'
+      if (typingEl) typingEl.style.display = 'none'
       streamDiv.innerHTML = mdToHtml(fullText)
     }
   } catch (err) {
@@ -412,30 +322,163 @@ async function inlineSend(id) {
   if (input) input.focus()
 }
 
-function _inlineAppendMsg(msgsEl, role, html, name) {
+function _fcAppendMsg(role, html, name) {
+  const msgsEl = document.getElementById('fc-msgs')
+  if (!msgsEl) return
   const el = document.createElement('div')
-  el.className = 'inline-msg ' + role
-  el.innerHTML = `<div class="mn ${role}">${name}</div><div>${html}</div>`
+  el.className = 'fc-msg ' + role
+  el.innerHTML = `<div class="fc-mn ${role}">${name}</div><div>${html}</div>`
   msgsEl.appendChild(el)
   msgsEl.scrollTop = msgsEl.scrollHeight
 }
 
-// ── Filtrar agentes (busca dentro da categoria atual)
+// Limpar conversa do agente ativo
+function fcClear() {
+  if (!_activeAgentId) return
+  _inlineSessions[_activeAgentId] = { history: [], streaming: false }
+  const agent = allAgents.find(a => a.id === _activeAgentId)
+  const msgsEl = document.getElementById('fc-msgs')
+  if (msgsEl && agent) {
+    msgsEl.innerHTML = `
+      <div class="fc-msg ai">
+        <div class="fc-mn ai">${agent.emoji} ${agent.name}</div>
+        <div>Conversa reiniciada. Como posso ajudar?</div>
+      </div>`
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+// HOME — grid de categorias
+// ════════════════════════════════════════════════════════════
+function renderHomeCats() {
+  const grid = document.getElementById('cats-grid')
+  if (!grid) return
+
+  const groups = {}
+  for (const cat of Object.keys(CAT_META)) {
+    const list = allAgents.filter(a => a.category === cat)
+    if (list.length > 0) groups[cat] = list
+  }
+
+  grid.innerHTML = Object.entries(groups).map(([cat, list]) => {
+    const meta = CAT_META[cat] || { icon: '🤖', color: '#6C63FF' }
+    return `
+      <div class="cat-card anim-in" data-cat="${encodeURIComponent(cat)}">
+        <div class="cat-card-icon" style="background:${meta.color}22">${meta.icon}</div>
+        <div class="cat-card-name">${cat}</div>
+        <div class="cat-card-count">${list.length} agente${list.length !== 1 ? 's' : ''}</div>
+      </div>`
+  }).join('')
+
+  grid.addEventListener('click', function(e) {
+    const card = e.target.closest('.cat-card')
+    if (card) {
+      const cat = decodeURIComponent(card.dataset.cat)
+      // Expandir na sidebar e navegar para tela de agentes
+      const hdr = document.querySelector(`.sb-cat-header[data-cat="${encodeURIComponent(cat)}"]`)
+      if (hdr) _toggleSidebarCat(hdr, cat)
+      openCategoryScreen(cat)
+    }
+  })
+}
+
+// ── Tela de agentes da categoria (grid de cards)
+function openCategoryScreen(cat) {
+  const meta = CAT_META[cat] || { icon: '🤖', color: '#6C63FF' }
+  const list = allAgents.filter(a => a.category === cat)
+
+  document.getElementById('agents-screen-icon').textContent = meta.icon
+  document.getElementById('agents-screen-icon').style.background = meta.color + '22'
+  document.getElementById('agents-screen-title').textContent = cat
+  document.getElementById('agents-screen-sub').textContent =
+    `${list.length} agente${list.length !== 1 ? 's' : ''} especializados disponíveis`
+
+  const searchEl = document.getElementById('agent-search')
+  if (searchEl) searchEl.value = ''
+
+  renderAgentsGrid(list)
+
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'))
+  document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'))
+  document.getElementById('tab-agents').classList.add('active')
+}
+
+// ── Render grid de agentes (cards clicáveis → abre chat full)
+function renderAgentsGrid(list) {
+  const grid = document.getElementById('agents-grid')
+  if (!grid) return
+  if (!list || !list.length) {
+    grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--muted)">Nenhum agente encontrado</div>'
+    return
+  }
+
+  grid.innerHTML = list.map(a => `
+    <div class="agent-card anim-in" onclick="openAgentFullChat('${a.id}', null)">
+      <div class="agent-card-top">
+        <div class="agent-card-hdr">
+          <div class="agent-icon" style="background:${a.color}33">${a.emoji}</div>
+          <div style="flex:1;min-width:0">
+            <div class="agent-card-name">${a.name}</div>
+            <div class="agent-card-cat">${a.category}</div>
+          </div>
+          <span class="badge ${a.source === 'hybrid' ? 'badge-hybrid' : 'badge-cf'}">${a.source === 'hybrid' ? '⚡' : '☁️'}</span>
+        </div>
+        <div class="agent-card-desc">${a.desc}</div>
+        <div class="caps">${(a.capabilities || []).map(c => `<span class="cap-pill">${c}</span>`).join('')}</div>
+        ${a.basedOn ? `<div style="font-size:10px;color:#6B7280;margin-top:6px">📦 <span style="color:#a5b4fc">${a.basedOn}</span></div>` : ''}
+      </div>
+      <div class="agent-card-btn">
+        <i class="fas fa-comments"></i> Conversar com ${a.name.split(' ')[0]}
+      </div>
+    </div>`
+  ).join('')
+}
+
+// ── Filtrar agentes
 function filterAgents(q) {
-  const base = currentCategory ? allAgents.filter(a => a.category === currentCategory) : allAgents
+  const base = document.getElementById('agents-screen-title')?.textContent
+  const catName = (base && base !== 'Agentes') ? base : null
+  const list = catName ? allAgents.filter(a => a.category === catName) : allAgents
   const filtered = q.trim()
-    ? base.filter(a =>
+    ? list.filter(a =>
         a.name.toLowerCase().includes(q.toLowerCase()) ||
         a.desc.toLowerCase().includes(q.toLowerCase()) ||
         (a.capabilities || []).some(c => c.toLowerCase().includes(q.toLowerCase()))
       )
-    : base
+    : list
   renderAgentsGrid(filtered)
 }
 
-// ── Aliases para compatibilidade
-function testAgent(id) { toggleInlineChat(id) }
-function openAgentModal(id) { toggleInlineChat(id) }
+// ── Navegação tabs
+function showHome(el) {
+  _activeAgentId = null
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'))
+  document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'))
+  document.querySelectorAll('.sb-cat-header').forEach(h => h.classList.remove('open'))
+  document.querySelectorAll('.sb-cat-agents').forEach(a => a.classList.remove('open'))
+  document.querySelectorAll('.sb-agent-item').forEach(i => i.classList.remove('active'))
+  document.getElementById('tab-home').classList.add('active')
+  const navHome = document.getElementById('nav-home')
+  if (navHome) navHome.classList.add('active')
+}
+
+function showTab(name, el) {
+  _activeAgentId = null
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'))
+  document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'))
+  document.querySelectorAll('.sb-agent-item').forEach(i => i.classList.remove('active'))
+  const panel = document.getElementById('tab-' + name)
+  if (panel) panel.classList.add('active')
+  if (el) el.classList.add('active')
+  if (window.innerWidth <= 540) {
+    const s = document.getElementById('sidebar')
+    const o = document.getElementById('sidebar-overlay')
+    if (s && !s.classList.contains('collapsed')) {
+      s.classList.add('collapsed')
+      if (o) o.style.display = 'none'
+    }
+  }
+}
 
 // ── Chat livre (tab Chat)
 function renderChatModels() {
@@ -462,7 +505,6 @@ async function sendChat() {
   if (!msg) return
   const agentId = document.getElementById('chat-agent').value
   input.value = ''
-  input.style.height = 'auto'
 
   if (agentId) {
     appendChatMsg('user', msg)
@@ -475,7 +517,7 @@ async function sendChat() {
       const data = await res.json()
       document.getElementById('typing-indicator').style.display = 'none'
       const agent = allAgents.find(a => a.id === agentId)
-      appendChatMsg('assistant', data.response || 'Sem resposta', agent ? agent.name : 'Agente', agent ? agent.emoji : '🤖')
+      appendChatMsg('assistant', data.response || 'Sem resposta', agent?.name || 'Agente', agent?.emoji || '🤖')
     } catch(e) {
       document.getElementById('typing-indicator').style.display = 'none'
       appendChatMsg('assistant', '❌ Erro: ' + e.message)
@@ -561,7 +603,7 @@ function updateChatHistory() {
   const userMsgs = chatHistory.filter(m => m.role === 'user')
   if (!userMsgs.length) return
   list.innerHTML = userMsgs.slice(-5).reverse().map(m =>
-    `<div style="padding:4px 6px;border-radius:6px;hover:background:var(--border);cursor:pointer;font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.content.slice(0, 35)}…</div>`
+    `<div style="padding:4px 6px;border-radius:6px;cursor:pointer;font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.content.slice(0, 35)}…</div>`
   ).join('')
 }
 
@@ -594,15 +636,13 @@ async function loadStatus() {
           ${info.url ? `<a href="${info.url}" target="_blank" style="font-size:11px;color:#6C63FF">${info.url}</a>` : ''}
           ${info.note ? `<div style="font-size:11px;margin-top:2px;color:#F59E0B">${info.note}</div>` : ''}
         </div>
-      </div>
-    `).join('')
+      </div>`).join('')
 
     const featuresHtml = (data.features || []).map(f => `
       <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;background:var(--bg)">
         <i class="fas fa-check-circle" style="color:#34D399;font-size:12px"></i>
         <span style="font-size:13px;color:#fff">${f}</span>
-      </div>
-    `).join('')
+      </div>`).join('')
 
     container.innerHTML = `
       <div class="card">
@@ -631,18 +671,15 @@ async function loadStatus() {
 // ── Utils
 function escHtml(t) {
   if (!t) return ''
-  return String(t)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+  return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
 }
 
 function mdToHtml(md) {
   if (!md) return ''
   let s = String(md)
   s = s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-  s = s.replace(/```(\w*)?\n?([\s\S]*?)```/g, function(_, lang, code) {
-    return '<pre style="background:#0d0d1a;border:1px solid #2A2D40;border-radius:8px;padding:10px;overflow-x:auto;margin:6px 0"><code style="color:#e2e8f0;font-family:monospace;font-size:12px">' + code.trim() + '</code></pre>'
-  })
+  s = s.replace(/```(\w*)?\n?([\s\S]*?)```/g, (_,__,code) =>
+    '<pre style="background:#0d0d1a;border:1px solid #2A2D40;border-radius:8px;padding:10px;overflow-x:auto;margin:6px 0"><code style="color:#e2e8f0;font-family:monospace;font-size:12px">' + code.trim() + '</code></pre>')
   s = s.replace(/`([^`]+)`/g, '<code style="background:#1e2030;padding:1px 5px;border-radius:4px;color:#f472b6;font-family:monospace">$1</code>')
   s = s.replace(/\*\*([^*]+)\*\*/g, '<strong style="color:white">$1</strong>')
   s = s.replace(/\*([^*\n]+)\*/g, '<em>$1</em>')
@@ -656,5 +693,21 @@ function mdToHtml(md) {
   return s
 }
 
-// ── Inicializar quando DOM pronto
+// Inicializar quando DOM pronto
 document.addEventListener('DOMContentLoaded', init)
+
+// Listener global para perguntas rápidas do chat full-screen
+document.addEventListener('click', function(e) {
+  const qbtn = e.target.closest('.fc-qbtn')
+  if (qbtn) {
+    const id = qbtn.dataset.agentId || _activeAgentId
+    const q  = qbtn.dataset.q
+    const inp = document.getElementById('fc-input')
+    if (inp && id) { inp.value = q; _activeAgentId = id; fcSend() }
+  }
+})
+
+// Fechar accordions da sidebar quando clicar fora
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape' && _activeAgentId) showHome(null)
+})

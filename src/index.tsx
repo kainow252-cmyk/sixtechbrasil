@@ -883,6 +883,8 @@ aside.collapsed{width:0;overflow:hidden}
 main{flex:1;overflow-y:auto;display:flex;flex-direction:column}
 .tab-panel{display:none;flex:1;padding:20px}
 .tab-panel.active{display:flex;flex-direction:column;gap:16px}
+/* Full-screen chat não usa scroll no main — gerencia internamente */
+#tab-agent-chat{overflow:hidden}
 
 /* ── Cards ────────────────────────────────────────────────── */
 .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px}
@@ -1070,20 +1072,105 @@ select option{background:var(--card)}
 @keyframes slideIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 .anim-in{animation:slideIn .22s ease}
 
-/* ── Sidebar Categorias Colapsáveis ───────────────────────── */
-.cat-header{
+/* ── Sidebar Accordion (sb-cat-*) ─────────────────────────── */
+.sb-cat-group{border-bottom:1px solid rgba(42,45,64,.5)}
+.sb-cat-header{
   display:flex;align-items:center;gap:9px;
   padding:9px 14px;cursor:pointer;
   font-size:12px;font-weight:600;color:var(--text);
   border-left:3px solid transparent;
   transition:all .15s;user-select:none;
 }
-.cat-header:hover{background:rgba(108,99,255,.08)}
-.cat-header.open{color:#fff;background:rgba(108,99,255,.1);border-left-color:var(--primary)}
-.cat-header.active-cat{color:#fff;background:rgba(108,99,255,.14);border-left-color:var(--secondary)}
-.cat-header .cat-icon{width:22px;height:22px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0}
-.cat-header .cat-name{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.cat-header .cat-count{font-size:9px;background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:1px 5px;color:var(--muted)}
+.sb-cat-header:hover{background:rgba(108,99,255,.08);color:#fff}
+.sb-cat-header.open{color:#fff;background:rgba(108,99,255,.1);border-left-color:var(--primary)}
+.sb-cat-icon{width:22px;height:22px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0}
+.sb-cat-name{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sb-cat-count{font-size:9px;background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:1px 5px;color:var(--muted);flex-shrink:0}
+.sb-cat-arrow{font-size:12px;color:var(--muted);transition:transform .22s;flex-shrink:0;line-height:1}
+.sb-cat-header.open .sb-cat-arrow{transform:rotate(90deg)}
+.sb-cat-agents{overflow:hidden;max-height:0;transition:max-height .28s ease}
+.sb-cat-agents.open{max-height:600px}
+.sb-agent-item{
+  display:flex;align-items:center;gap:8px;
+  padding:7px 14px 7px 30px;cursor:pointer;
+  border-left:3px solid transparent;
+  transition:all .15s;font-size:12px;color:var(--muted);
+}
+.sb-agent-item:hover{background:rgba(108,99,255,.07);color:var(--text)}
+.sb-agent-item.active{background:rgba(108,99,255,.14);color:#fff;border-left-color:var(--primary)}
+.sb-ag-emoji{font-size:14px;flex-shrink:0;width:18px;text-align:center}
+.sb-ag-name{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sb-ag-badge{font-size:9px;padding:1px 5px;border-radius:999px;flex-shrink:0}
+
+/* ── Full-Screen Agent Chat (fc-*) ────────────────────────── */
+#tab-agent-chat{padding:0!important;gap:0!important}
+.fc-wrap{display:flex;flex-direction:column;height:100%;overflow:hidden}
+.fc-hdr{
+  display:flex;align-items:center;gap:12px;
+  padding:14px 20px;border-bottom:1px solid var(--border);flex-shrink:0;
+  background:var(--surface);
+}
+.fc-agent-icon-el{
+  width:46px;height:46px;border-radius:14px;
+  display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0;
+}
+.fc-hdr-info{flex:1;min-width:0}
+.fc-hdr-name{font-size:16px;font-weight:800;color:#fff;line-height:1.2}
+.fc-hdr-sub{font-size:11px;color:var(--muted);margin-top:2px}
+.fc-hdr-caps{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+.fc-hdr-actions{display:flex;gap:8px;flex-shrink:0}
+.fc-back-btn{
+  display:flex;align-items:center;gap:6px;padding:7px 14px;
+  border-radius:9px;background:var(--card);border:1px solid var(--border);
+  color:var(--muted);font-size:12px;cursor:pointer;transition:all .15s;
+}
+.fc-back-btn:hover{color:#fff;background:var(--border)}
+.fc-clear-btn{
+  display:flex;align-items:center;gap:6px;padding:7px 14px;
+  border-radius:9px;background:var(--card);border:1px solid var(--border);
+  color:var(--muted);font-size:12px;cursor:pointer;transition:all .15s;
+}
+.fc-clear-btn:hover{color:#F87171;border-color:#F87171}
+.fc-body{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.fc-msgs{
+  flex:1;overflow-y:auto;padding:20px 24px;
+  display:flex;flex-direction:column;gap:12px;
+}
+.fc-msg{border-radius:12px;padding:12px 16px;font-size:13px;line-height:1.65;animation:slideIn .18s ease}
+.fc-msg.ai{background:var(--surface);border-left:3px solid var(--secondary);max-width:85%}
+.fc-msg.user{background:rgba(108,99,255,.12);border-left:3px solid var(--primary);max-width:85%;align-self:flex-end}
+.fc-mn{font-size:11px;font-weight:700;margin-bottom:5px}
+.fc-mn.ai{color:var(--secondary)}
+.fc-mn.user{color:var(--primary)}
+.fc-stream{display:inline}
+.fc-typing{
+  display:none;padding:6px 24px;font-size:11px;color:var(--muted);
+  align-items:center;gap:6px;flex-shrink:0;
+}
+.fc-quick{
+  display:flex;gap:6px;padding:10px 24px 4px;
+  flex-wrap:wrap;flex-shrink:0;border-top:1px solid var(--border);
+}
+.fc-qbtn{
+  font-size:11px;padding:5px 11px;border-radius:8px;
+  background:var(--card);border:1px solid var(--border);
+  color:var(--muted);cursor:pointer;transition:all .15s;
+}
+.fc-qbtn:hover{background:rgba(108,99,255,.15);color:#fff;border-color:var(--primary)}
+.fc-input-row{
+  display:flex;gap:10px;padding:12px 20px 14px;
+  border-top:1px solid var(--border);flex-shrink:0;
+  background:var(--surface);
+}
+#fc-input{flex:1;height:52px;resize:none;font-size:13px;border-radius:10px;padding:10px 14px}
+#fc-send-btn{
+  height:52px;width:52px;flex-shrink:0;border-radius:10px;
+  background:linear-gradient(135deg,var(--primary),#4f46e5);
+  color:#fff;border:none;cursor:pointer;font-size:16px;
+  transition:opacity .15s;
+}
+#fc-send-btn:hover{opacity:.85}
+#fc-send-btn:disabled{opacity:.4;cursor:not-allowed}
 </style>
 </head>
 <body>
@@ -1243,6 +1330,57 @@ select option{background:var(--card)}
       </div>
       <div id="status-details" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px"></div>
     </div>
+
+    <!-- ══ TELA: AGENTE FULL-SCREEN CHAT ════════════════════════ -->
+    <div id="tab-agent-chat" class="tab-panel">
+      <div class="fc-wrap">
+
+        <!-- Cabeçalho do agente -->
+        <div class="fc-hdr">
+          <div id="fc-agent-icon" class="fc-agent-icon-el">🤖</div>
+          <div class="fc-hdr-info">
+            <div id="fc-agent-name" class="fc-hdr-name">Agente</div>
+            <div id="fc-agent-sub" class="fc-hdr-sub">Categoria · Modelo</div>
+            <div id="fc-agent-caps" class="fc-hdr-caps"></div>
+          </div>
+          <div class="fc-hdr-actions">
+            <button class="fc-clear-btn" onclick="fcClear()" title="Limpar conversa">
+              <i class="fas fa-trash-alt"></i> Limpar
+            </button>
+            <button class="fc-back-btn" onclick="showHome(null)" title="Voltar ao início">
+              <i class="fas fa-arrow-left"></i> Voltar
+            </button>
+          </div>
+        </div>
+
+        <!-- Corpo do chat -->
+        <div class="fc-body">
+
+          <!-- Mensagens -->
+          <div id="fc-msgs" class="fc-msgs"></div>
+
+          <!-- Indicador de digitação -->
+          <div id="fc-typing" class="fc-typing">
+            <span class="typing-dot"></span>
+            <span>Agente digitando...</span>
+          </div>
+
+          <!-- Perguntas rápidas -->
+          <div id="fc-quick" class="fc-quick"></div>
+
+          <!-- Input row -->
+          <div class="fc-input-row">
+            <textarea id="fc-input"
+              placeholder="Digite sua mensagem... (Enter para enviar)"
+              onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();fcSend()}"></textarea>
+            <button id="fc-send-btn" onclick="fcSend()" title="Enviar">
+              <i class="fas fa-paper-plane"></i>
+            </button>
+          </div>
+
+        </div><!-- /.fc-body -->
+      </div><!-- /.fc-wrap -->
+    </div><!-- /#tab-agent-chat -->
 
   </main>
 </div>
