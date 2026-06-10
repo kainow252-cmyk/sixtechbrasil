@@ -375,6 +375,9 @@ function smartRoute(task: string): string[] {
 const app = new Hono<{ Bindings: Bindings }>()
 app.use('*', cors())
 
+// ── GET /favicon.ico — evita 500 no browser
+app.get('/favicon.ico', (c) => new Response(null, { status: 204 }))
+
 // ── GET /api/agents ────────────────────────────────────────────────────────
 app.get('/api/agents', (c) => {
   return c.json({
@@ -532,7 +535,7 @@ app.get('/', (c) => {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SixTech MAS — Multi-Agent System v3.0</title>
-<script src="https://cdn.tailwindcss.com/3.4.1/tailwind.min.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
 <style>
   :root {
