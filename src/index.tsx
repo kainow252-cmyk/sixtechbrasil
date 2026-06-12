@@ -794,11 +794,20 @@ app.get('/api/me', async (c) => {
 })
 
 // ── Middleware: protege rotas /api/* que precisam de auth ─────────────────────
-// Rotas PÚBLICAS (sem login): login, me, logout, status, models
-const PUBLIC_API = ['/api/login', '/api/me', '/api/logout', '/api/status', '/api/models']
+// Rotas PÚBLICAS (sem login): login, me, logout, status, models + knowledge/cache/apis
+const PUBLIC_API = [
+  '/api/login', '/api/me', '/api/logout', '/api/status', '/api/models',
+  '/api/public-apis',
+  '/api/cache/stats',
+  '/api/knowledge', '/api/knowledge/stats', '/api/knowledge/add',
+  '/api/knowledge/learn', '/api/knowledge/clone',
+  '/api/cache-query'
+]
 app.use('/api/*', async (c, next) => {
   const path = new URL(c.req.url).pathname
-  if (PUBLIC_API.includes(path)) return next()
+  // Verifica rota exata ou prefixo (ex: /api/knowledge/...)
+  const isPublic = PUBLIC_API.some(p => path === p || path.startsWith(p + '/') || path.startsWith('/api/public-apis'))
+  if (isPublic) return next()
   const sess = await getSession(c)
   if (!sess) return c.json({ error: 'Não autorizado', code: 401 }, 401)
   return next()
