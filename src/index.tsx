@@ -978,11 +978,53 @@ REGRAS OBRIGATÓRIAS:
     { role: 'user', content: `Gere agora o documento: ${docType}\n\nInstruções: ${instructions}` }
   ]
 
-  const stream = await (c.env.AI as any).run(agent.model, {
+  const cfStream = await (c.env.AI as any).run(agent.model, {
     messages, max_tokens: 4096, stream: true
   })
 
-  return new Response(stream, {
+  // Envolver o stream do CF para garantir que o [DONE] final seja emitido
+  // e filtrar eventos sem conteúdo (finish_reason, etc.)
+  const { readable, writable } = new TransformStream()
+  const writer = writable.getWriter()
+  const enc = new TextEncoder()
+
+  ;(async () => {
+    try {
+      const reader = (cfStream as ReadableStream<Uint8Array>).getReader()
+      const dec = new TextDecoder()
+      let buf = ''
+      let streamEnded = false
+      while (!streamEnded) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buf += dec.decode(value, { stream: true })
+        const parts = buf.split('\n\n')
+        buf = parts.pop() || ''
+        for (const part of parts) {
+          for (const line of part.split('\n')) {
+            if (!line.startsWith('data:')) continue
+            const d = line.slice(5).trim()
+            if (d === '[DONE]') { streamEnded = true; break }
+            try {
+              const obj = JSON.parse(d)
+              // Ignorar eventos sem conteúdo (finish_reason, etc.)
+              const content = obj?.response ?? obj?.choices?.[0]?.delta?.content ?? null
+              if (content !== null && content !== undefined) {
+                // Re-emitir apenas o chunk de conteúdo no formato padrão CF
+                await writer.write(enc.encode(`data: ${JSON.stringify({ response: content })}\n\n`))
+              }
+            } catch {}
+          }
+          if (streamEnded) break
+        }
+      }
+    } catch {}
+    // Garantir [DONE] final sempre
+    await writer.write(enc.encode('data: [DONE]\n\n'))
+    await writer.close()
+  })()
+
+  return new Response(readable, {
     headers: {
       'Content-Type': 'text/event-stream; charset=utf-8',
       'Cache-Control': 'no-cache',
@@ -1021,7 +1063,7 @@ ESTRUTURA DA ANÁLISE (use Markdown):
 
   const userMsg = `Arquivo: ${fileName}\n\n--- CONTEÚDO DO DOCUMENTO ---\n${fileContent.slice(0, 12000)}\n--- FIM DO DOCUMENTO ---\n\n${instruction || 'Analise este documento e aponte melhorias, erros e ajustes necessários.'}`
 
-  const stream = await (c.env.AI as any).run(agent.model, {
+  const cfStreamAnalyze = await (c.env.AI as any).run(agent.model, {
     messages: [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: userMsg }
@@ -1029,7 +1071,44 @@ ESTRUTURA DA ANÁLISE (use Markdown):
     max_tokens: 4096, stream: true
   })
 
-  return new Response(stream, {
+  // Wrapper com [DONE] garantido
+  const { readable: analyzeReadable, writable: analyzeWritable } = new TransformStream()
+  const analyzeWriter = analyzeWritable.getWriter()
+  const encA = new TextEncoder()
+
+  ;(async () => {
+    try {
+      const reader = (cfStreamAnalyze as ReadableStream<Uint8Array>).getReader()
+      const dec = new TextDecoder()
+      let buf = '', streamEnded = false
+      while (!streamEnded) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buf += dec.decode(value, { stream: true })
+        const parts = buf.split('\n\n')
+        buf = parts.pop() || ''
+        for (const part of parts) {
+          for (const line of part.split('\n')) {
+            if (!line.startsWith('data:')) continue
+            const d = line.slice(5).trim()
+            if (d === '[DONE]') { streamEnded = true; break }
+            try {
+              const obj = JSON.parse(d)
+              const content = obj?.response ?? obj?.choices?.[0]?.delta?.content ?? null
+              if (content !== null && content !== undefined) {
+                await analyzeWriter.write(encA.encode(`data: ${JSON.stringify({ response: content })}\n\n`))
+              }
+            } catch {}
+          }
+          if (streamEnded) break
+        }
+      }
+    } catch {}
+    await analyzeWriter.write(encA.encode('data: [DONE]\n\n'))
+    await analyzeWriter.close()
+  })()
+
+  return new Response(analyzeReadable, {
     headers: {
       'Content-Type': 'text/event-stream; charset=utf-8',
       'Cache-Control': 'no-cache',
@@ -2007,7 +2086,7 @@ select option{background:var(--card)}
   <div class="login-box">
     <div class="login-logo">🤖</div>
     <div class="login-title">SixTech MAS</div>
-    <div class="login-sub">Multi-Agent System v3.0 · Cloudflare Workers AI</div>
+    <div class="login-sub">Plataforma de Agentes de IA</div>
 
     <div class="login-field">
       <label class="login-label" for="l-user">Usuário</label>
@@ -2038,11 +2117,10 @@ select option{background:var(--card)}
     <button class="btn-sidebar-toggle" onclick="toggleSidebar()" title="Menu">
       <i class="fas fa-bars"></i>
     </button>
-    <div class="hdr-logo">🤖</div>
-    <div>
-      <div class="hdr-title">SixTech MAS <span class="hdr-badge">v3.0</span></div>
-      <div class="hdr-sub">Multi-Agent System · Cloudflare Workers AI</div>
-    </div>
+      <div class="hdr-logo">🤖</div>
+      <div>
+        <div class="hdr-title">SixTech Brasil</div>
+      </div>
   </div>
   <div class="hdr-right">
     <div class="status-pill">
@@ -2053,7 +2131,7 @@ select option{background:var(--card)}
       <i class="fas fa-user-circle" style="color:var(--primary)"></i>
       <span id="hdr-username">—</span>
     </div>
-    <a href="https://github.com/kainow252-cmyk/sixtechbrasil" target="_blank" class="btn-gh">
+    <a href="https://github.com/kainow252-cmyk/sixtechbrasil" target="_blank" class="btn-gh admin-only" style="display:none">
       <i class="fab fa-github"></i> GitHub
     </a>
     <button class="btn-gh" id="logout-btn" style="display:none" onclick="doLogout()" title="Sair">
@@ -2176,7 +2254,7 @@ select option{background:var(--card)}
         <div class="stat-card"><div class="stat-val gtext" id="stat-agents">—</div><div class="stat-label">Agentes Ativos</div></div>
         <div class="stat-card"><div class="stat-val" style="color:#22D3EE" id="stat-models">8</div><div class="stat-label">Modelos de IA</div></div>
         <div class="stat-card"><div class="stat-val" style="color:#34D399">4</div><div class="stat-label">Repos Integrados</div></div>
-        <div class="stat-card"><div class="stat-val" style="color:#F59E0B">v3.0</div><div class="stat-label">Versão</div></div>
+        <div class="stat-card admin-only" style="display:none"><div class="stat-val" style="color:#F59E0B">v3.0</div><div class="stat-label">Versão</div></div>
       </div>
       <div id="status-details" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px"></div>
     </div>
@@ -2190,7 +2268,7 @@ select option{background:var(--card)}
           <div id="fc-agent-icon" class="fc-agent-icon-el">🤖</div>
           <div class="fc-hdr-info">
             <div id="fc-agent-name" class="fc-hdr-name">Agente</div>
-            <div id="fc-agent-sub" class="fc-hdr-sub">Categoria · Modelo</div>
+            <div id="fc-agent-sub" class="fc-hdr-sub admin-only" style="display:none">Categoria · Modelo</div>
             <div id="fc-agent-caps" class="fc-hdr-caps"></div>
           </div>
           <div class="fc-hdr-actions">

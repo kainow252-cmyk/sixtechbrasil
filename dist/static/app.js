@@ -7,6 +7,8 @@ let _inlineSessions = {}           // agentId -> { history, streaming }
 // ════════════════════════════════════════════════════════════
 // AUTH — Login / Logout
 // ════════════════════════════════════════════════════════════
+let _isAdmin = false  // true se user === 'admin'
+
 async function checkAuth() {
   try {
     const res = await fetch('/api/me')
@@ -30,6 +32,8 @@ function _showLogin() {
 function _showApp(user) {
   const overlay = document.getElementById('login-overlay')
   if (overlay) overlay.classList.add('hidden')
+  // Detectar admin
+  _isAdmin = (user === 'admin')
   // Mostrar nome do usuário e botão sair no header
   const hdrUser = document.getElementById('hdr-user')
   const hdrUsername = document.getElementById('hdr-username')
@@ -37,6 +41,10 @@ function _showApp(user) {
   if (hdrUser)     { hdrUser.style.display = 'flex' }
   if (hdrUsername) { hdrUsername.textContent = user }
   if (logoutBtn)   { logoutBtn.style.display = 'flex' }
+  // Mostrar/ocultar elementos só de admin
+  document.querySelectorAll('.admin-only').forEach(el => {
+    el.style.display = _isAdmin ? '' : 'none'
+  })
   // Inicializar app
   init()
 }
@@ -289,7 +297,10 @@ function openAgentFullChat(id, sidebarItemEl) {
 
   if (iconEl) { iconEl.textContent = agent.emoji; iconEl.style.background = agent.color + '33' }
   if (nameEl) nameEl.textContent = agent.name
-  if (subEl)  subEl.textContent  = agent.category + ' · ' + (agent.model || '').split('/').pop()
+  // Subtítulo: apenas categoria para usuários, categoria+modelo para admin
+  if (subEl)  subEl.textContent  = _isAdmin
+    ? agent.category + ' · ' + (agent.model || '').split('/').pop()
+    : agent.category
   if (capsEl) capsEl.innerHTML   = (agent.capabilities || []).map(c => `<span class="cap-pill">${c}</span>`).join('')
 
   // Perguntas rápidas
@@ -390,7 +401,8 @@ async function fcSend() {
       const reader = res.body.getReader()
       const decoder = new TextDecoder()
       let buffer = ''
-      while (true) {
+      let _chatStreamDone = false
+      while (!_chatStreamDone) {
         const { done, value } = await reader.read()
         if (done) break
         buffer += decoder.decode(value, { stream: true })
@@ -400,7 +412,7 @@ async function fcSend() {
           for (const line of part.split('\n')) {
             if (!line.startsWith('data:')) continue
             const data = line.slice(5).trim()
-            if (data === '[DONE]') continue
+            if (data === '[DONE]') { _chatStreamDone = true; break }
             try {
               const json = JSON.parse(data)
               const chunk = json.response || (json.choices?.[0]?.delta?.content) || ''
@@ -412,8 +424,10 @@ async function fcSend() {
               }
             } catch {}
           }
+          if (_chatStreamDone) break
         }
       }
+      try { reader.cancel() } catch {}
       streamDiv.innerHTML = mdToHtml(fullText)
     } else {
       const data = await res.json()
@@ -628,7 +642,8 @@ async function sendChat() {
     const reader = res.body.getReader()
     const decoder = new TextDecoder()
     let buffer = ''
-    while (true) {
+    let _mainChatDone = false
+    while (!_mainChatDone) {
       const { done, value } = await reader.read()
       if (done) break
       buffer += decoder.decode(value, { stream: true })
@@ -638,7 +653,7 @@ async function sendChat() {
         for (const line of part.split('\n')) {
           if (!line.startsWith('data:')) continue
           const data = line.slice(5).trim()
-          if (data === '[DONE]') continue
+          if (data === '[DONE]') { _mainChatDone = true; break }
           try {
             const json = JSON.parse(data)
             const chunk = json.response || (json.choices?.[0]?.delta?.content) || ''
@@ -649,8 +664,10 @@ async function sendChat() {
             }
           } catch {}
         }
+        if (_mainChatDone) break
       }
     }
+    try { reader.cancel() } catch {}
     textEl.innerHTML = mdToHtml(fullText)
     chatHistory.push({ role: 'assistant', content: fullText })
     updateChatHistory()
@@ -740,7 +757,7 @@ async function loadStatus() {
     const statModels = document.getElementById('stat-models')
     if (statAgents) statAgents.textContent = data.agents
     if (statModels) statModels.textContent = data.models
-    document.getElementById('status-text').textContent = 'Online v' + data.version
+    document.getElementById('status-text').textContent = _isAdmin ? 'Online v' + data.version : 'Online'
   } catch(e) {
     const el = document.getElementById('status-text')
     if (el) el.textContent = 'Verificando...'
@@ -800,16 +817,19 @@ function switchFcTab(tab, el) {
 
 // Tipos de documento por categoria do agente
 const DOC_TYPES = {
-  'Jurídico':       ['NDA','Contrato de Prestação','Contrato de Trabalho','LGPD/Política de Privacidade','Procuração','Distrato','Termo de Confidencialidade'],
-  'Financeiro':     ['DRE','Fluxo de Caixa','Relatório de Budget','Análise de Investimento','Relatório Financeiro'],
-  'Administrativo': ['Ata de Reunião','E-mail Formal','Ofício','Memorando','Proposta Comercial','Manual de Procedimentos'],
-  'RH':             ['Contrato CLT','Job Description','Política de Férias','Avaliação de Desempenho','PDI','Carta de Demissão'],
-  'Comercial':      ['Proposta Comercial','Script de Vendas','Contrato de Venda','Carta de Cobrança'],
-  'Marketing':      ['Briefing de Campanha','Roteiro de Vídeo','Plano de Marketing','Relatório de Resultados'],
-  'Tecnologia':     ['Especificação Técnica','API Docs','README','Política de Segurança','SLA'],
-  'Diretoria':      ['Plano Estratégico','Relatório Executivo','Board Report','OKRs','Plano de 90 Dias'],
-  'Crédito':        ['Política de Crédito','Régua de Cobrança','Relatório de Risco','Contrato de Empréstimo'],
-  'default':        ['Relatório','Contrato','Proposta','Manual','Documento Personalizado']
+  'Jurídico':       ['NDA','Contrato de Prestação de Serviços','Contrato de Trabalho','LGPD / Política de Privacidade','Procuração','Distrato','Termo de Confidencialidade','Acordo de Parceria','Contrato Social','Contrato de Locação','Termo de Uso','Notificação Extrajudicial','Contestação'],
+  'Financeiro':     ['DRE','Fluxo de Caixa','Relatório de Budget','Análise de Investimento','Relatório Financeiro','Planilha de Custos','Proposta de Financiamento','Carta de Crédito','Análise de Viabilidade','Relatório de Auditoria'],
+  'Administrativo': ['Ata de Reunião','E-mail Formal','Ofício','Memorando','Proposta Comercial','Manual de Procedimentos','Cronograma de Projeto','Comunicado Interno','Declaração','Procuração Administrativa'],
+  'RH':             ['Contrato CLT','Job Description','Política de Férias','Avaliação de Desempenho','PDI','Carta de Demissão','Carta de Advertência','Acordo de Confidencialidade (RH)','Política de Home Office','Plano de Cargos e Salários'],
+  'Comercial':      ['Proposta Comercial','Script de Vendas','Contrato de Venda','Carta de Cobrança','Apresentação de Produto','Ordem de Compra','Contrato de Distribuição','Termos de Garantia','Carta de Intenção'],
+  'Marketing':      ['Briefing de Campanha','Roteiro de Vídeo','Plano de Marketing','Relatório de Resultados','Calendário Editorial','Plano de Lançamento','Análise de Concorrência','Plano de Mídia','Relatório de SEO'],
+  'Tecnologia':     ['Especificação Técnica','API Docs','README','Política de Segurança','SLA','Arquitetura de Solução','Plano de Testes','Manual do Desenvolvedor','Documentação de Banco de Dados','Plano de Contingência'],
+  'Diretoria':      ['Plano Estratégico','Relatório Executivo','Board Report','OKRs','Plano de 90 Dias','Análise SWOT','Plano de Expansão','Relatório para Sócios','Carta aos Acionistas'],
+  'Orquestração':   ['Relatório de Análise','Contrato','Proposta Comercial','Plano de Ação','Relatório Executivo','Documento Técnico','NDA','Manual','Ata de Reunião','Carta Formal'],
+  'Crédito':        ['Política de Crédito','Régua de Cobrança','Relatório de Risco','Contrato de Empréstimo','Proposta de Renegociação','Análise de Score','Termo de Quitação'],
+  'Seguros':        ['Proposta de Seguro','Apólice Resumida','Carta de Sinistro','Relatório de Vistoria','Declaração de Seguro'],
+  'Imobiliário':    ['Contrato de Compra e Venda','Contrato de Locação','Proposta de Locação','Laudo de Avaliação','Contrato de Administração','Declaração de Posse'],
+  'default':        ['Relatório','Contrato','Proposta Comercial','Manual de Procedimentos','NDA','Ata de Reunião','Ofício','Memorando','E-mail Formal','Plano de Ação','Declaração','Laudo Técnico','Documento Personalizado']
 }
 
 let _docContent = ''    // texto puro do documento gerado
@@ -876,7 +896,8 @@ async function generateDocument() {
     const decoder = new TextDecoder()
     let buffer = ''
 
-    while (true) {
+    let streamDone = false
+    while (!streamDone) {
       const { done, value } = await reader.read()
       if (done) break
       buffer += decoder.decode(value, { stream: true })
@@ -886,9 +907,10 @@ async function generateDocument() {
         for (const line of part.split('\n')) {
           if (!line.startsWith('data:')) continue
           const data = line.slice(5).trim()
-          if (data === '[DONE]') continue
+          if (data === '[DONE]') { streamDone = true; break }
           try {
             const json  = JSON.parse(data)
+            // Ignorar eventos sem conteúdo útil (finish_reason, etc.)
             const chunk = json.response || json.choices?.[0]?.delta?.content || ''
             if (chunk) {
               _docContent += chunk
@@ -900,8 +922,11 @@ async function generateDocument() {
             }
           } catch {}
         }
+        if (streamDone) break
       }
     }
+    // Garantir que o reader seja cancelado para liberar recursos
+    try { reader.cancel() } catch {}
 
     // Finalizar
     if (previewArea) { previewArea.className = 'doc-preview'; previewArea.innerHTML = docMdToHtml(_docContent) }
@@ -1240,7 +1265,8 @@ async function analyzeFile() {
     const decoder = new TextDecoder()
     let buffer = ''
 
-    while (true) {
+    let _analysisDone = false
+    while (!_analysisDone) {
       const { done, value } = await reader.read()
       if (done) break
       buffer += decoder.decode(value, { stream: true })
@@ -1250,7 +1276,7 @@ async function analyzeFile() {
         for (const line of part.split('\n')) {
           if (!line.startsWith('data:')) continue
           const data = line.slice(5).trim()
-          if (data === '[DONE]') continue
+          if (data === '[DONE]') { _analysisDone = true; break }
           try {
             const json  = JSON.parse(data)
             const chunk = json.response || json.choices?.[0]?.delta?.content || ''
@@ -1264,8 +1290,10 @@ async function analyzeFile() {
             }
           } catch {}
         }
+        if (_analysisDone) break
       }
     }
+    try { reader.cancel() } catch {}
 
     if (resultEl) resultEl.innerHTML = docMdToHtml(_analysisContent)
     if (dlBar) { dlBar.style.display = 'flex' }
