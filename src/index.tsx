@@ -576,46 +576,49 @@ async function callCFAI(
   ]
   const resp = await (ai as any).run(model, { messages, max_tokens: maxTokens, stream: false })
 
-  // Objeto simples com campo response (padrão da maioria dos modelos)
-  if (resp && typeof resp === 'object' && !('getReader' in resp) && !('pipeTo' in resp)) {
-    if ('response' in resp && typeof (resp as any).response === 'string') {
-      return (resp as any).response || ''
-    }
-    // Kimi K2.6 / modelos que retornam { result: { response: '...' } }
-    if ('result' in resp && typeof (resp as any).result === 'object') {
-      const r = (resp as any).result
-      if (r && 'response' in r) return String(r.response || '')
-    }
-    // Fallback: serializar para detectar estrutura desconhecida
-    try {
-      const str = JSON.stringify(resp)
-      // Extrair primeiro valor string longo
-      const match = str.match(/"([^"]{10,})"/)
-      if (match) return match[1]
-    } catch { /* ignore */ }
-  }
+  if (resp && typeof resp === 'object') {
+    const r = resp as any
 
-  // ReadableStream — consumir e agregar tokens SSE
-  if (resp && typeof resp === 'object' && ('getReader' in resp || 'pipeTo' in resp)) {
-    const reader = (resp as ReadableStream<Uint8Array>).getReader()
-    const decoder = new TextDecoder()
-    let full = ''
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      const chunk = decoder.decode(value, { stream: true })
-      // SSE: "data: {...}\n\n"
-      for (const line of chunk.split('\n')) {
-        if (!line.startsWith('data:')) continue
-        const data = line.slice(5).trim()
-        if (data === '[DONE]') continue
-        try {
-          const obj = JSON.parse(data)
-          full += obj?.response ?? obj?.token ?? ''
-        } catch { full += data }
+    // 1. ReadableStream (stream não desligado) — consumir SSE chunks
+    if ('getReader' in r || 'pipeTo' in r) {
+      const reader = (r as ReadableStream<Uint8Array>).getReader()
+      const decoder = new TextDecoder()
+      let full = ''
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        const chunk = decoder.decode(value, { stream: true })
+        for (const line of chunk.split('\n')) {
+          if (!line.startsWith('data:')) continue
+          const data = line.slice(5).trim()
+          if (data === '[DONE]') continue
+          try {
+            const obj = JSON.parse(data)
+            full += obj?.response ?? obj?.choices?.[0]?.delta?.content ?? obj?.token ?? ''
+          } catch { /* ignore */ }
+        }
       }
+      return full
     }
-    return full
+
+    // 2. Formato padrão CF Workers AI — { response: "..." }
+    if ('response' in r && typeof r.response === 'string') return r.response || ''
+
+    // 3. Formato OpenAI/Kimi K2.6 — { choices: [{ message: { content: "..." } }] }
+    if (Array.isArray(r.choices) && r.choices.length > 0) {
+      const choice = r.choices[0]
+      // chat completion: choices[0].message.content
+      if (choice?.message?.content) return String(choice.message.content)
+      // streaming delta: choices[0].delta.content
+      if (choice?.delta?.content) return String(choice.delta.content)
+      // text completion: choices[0].text
+      if (choice?.text) return String(choice.text)
+    }
+
+    // 4. { result: { response: "..." } }
+    if (r.result && typeof r.result === 'object' && 'response' in r.result) {
+      return String(r.result.response || '')
+    }
   }
 
   return String(resp || '')
