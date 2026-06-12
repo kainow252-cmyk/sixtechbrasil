@@ -6,5 +6,12 @@
   "pages_build_output_dir": "./dist",
   "ai": {
     "binding": "AI"
-  }
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "sixtech-mas-db",
+      "database_id": "0871814d-dcec-4d0c-882a-359e1bee4825"
+    }
+  ]
 }

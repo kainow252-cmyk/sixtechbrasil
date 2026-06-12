@@ -2,7 +2,7 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 
 // ─── TYPES ───────────────────────────────────────────────────────────────────
-type Bindings = { AI: Ai }
+type Bindings = { AI: Ai; DB: D1Database }
 
 type AgentSource = 'cloudflare' | 'internal' | 'hybrid'
 
@@ -820,11 +820,61 @@ app.get('/api/agents', (c) => {
 })
 
 // ── POST /api/agent/:id ────────────────────────────────────────────────────
+// Cache-first: verifica D1 antes de chamar IA (economiza tokens)
 app.post('/api/agent/:id', async (c) => {
   const agent = AGENTS.find(a => a.id === c.req.param('id'))
   if (!agent) return c.json({ error: 'Agente não encontrado' }, 404)
-  const { message, task } = await c.req.json()
-  const result = await runAgent(agent, message || task || '', c.env.AI)
+
+  const { message, task, use_cache } = await c.req.json() as {
+    message?: string; task?: string; use_cache?: boolean
+  }
+  const userMsg = message || task || ''
+
+  // Cache-first (ativo por padrão, desligar com use_cache=false)
+  const db = c.env.DB
+  if (db && use_cache !== false && userMsg.length > 10) {
+    const hash = await sha256(`${agent.id}:${userMsg}`)
+    const now  = new Date().toISOString()
+    const cached = await db.prepare(
+      `SELECT * FROM query_cache WHERE query_hash=? AND (expires_at IS NULL OR expires_at > ?)`
+    ).bind(hash, now).first() as any
+
+    if (cached) {
+      // Atualiza hit_count
+      await db.prepare(`UPDATE query_cache SET hit_count=hit_count+1 WHERE id=?`)
+               .bind(cached.id).run()
+      // Retorna no mesmo formato de RunResult
+      return c.json({
+        agentId:     agent.id,
+        name:        agent.name,
+        emoji:       agent.emoji,
+        color:       agent.color,
+        model:       agent.model,
+        source:      agent.source,
+        response:    cached.response,
+        duration:    0,
+        fromCache:   true,
+        cacheHits:   (cached.hit_count ?? 0) + 1,
+        tokensSaved: cached.tokens_saved ?? 0
+      })
+    }
+
+    // Cache miss — chamar IA normalmente
+    const result = await runAgent(agent, userMsg, c.env.AI)
+
+    // Salvar no cache (TTL 24h por padrão)
+    const tokensEst = Math.ceil(userMsg.length / 4) + Math.ceil(result.response.length / 4)
+    const expiresAt = new Date(Date.now() + 24 * 3600 * 1000).toISOString()
+    await db.prepare(
+      `INSERT OR REPLACE INTO query_cache (query_hash,query_text,response,source,agent_id,tokens_saved,expires_at)
+       VALUES (?,?,?,?,?,?,?)`
+    ).bind(hash, userMsg, result.response, 'cloudflare-ai', agent.id, tokensEst, expiresAt).run()
+
+    return c.json({ ...result, fromCache: false })
+  }
+
+  // Sem DB ou cache desabilitado — comportamento original
+  const result = await runAgent(agent, userMsg, c.env.AI)
   return c.json(result)
 })
 
@@ -1045,6 +1095,365 @@ app.get('/api/status', (c) => {
     models: Object.keys(CF_MODELS).length,
     features: ['hybrid routing', 'SSE streaming', 'smart orchestration', 'pipeline mode', 'fallback chain'],
     timestamp: new Date().toISOString()
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
+// KNOWLEDGE BASE — APIs públicas · Cache de queries · Conhecimento acumulado
+// ═══════════════════════════════════════════════════════════════════════════
+
+// helper: SHA-256 hex de uma string (Web Crypto API — sem fs/node)
+async function sha256(text: string): Promise<string> {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text.toLowerCase().trim()))
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('')
+}
+
+// ── GET /api/public-apis ─────────────────────────────────────────────────
+// Lista APIs públicas gratuitas do banco. Suporta ?category=&q=&limit=
+app.get('/api/public-apis', async (c) => {
+  const db = c.env.DB
+  if (!db) return c.json({ error: 'DB não disponível' }, 503)
+
+  const category = c.req.query('category') || ''
+  const q        = c.req.query('q')        || ''
+  const limit    = Math.min(parseInt(c.req.query('limit') || '50'), 200)
+
+  let sql  = 'SELECT * FROM public_apis WHERE 1=1'
+  const params: (string | number)[] = []
+
+  if (category) { sql += ' AND category = ?';            params.push(category) }
+  if (q)        { sql += ' AND (name LIKE ? OR description LIKE ? OR tags LIKE ?)';
+                  params.push(`%${q}%`, `%${q}%`, `%${q}%`) }
+
+  sql += ' ORDER BY quality DESC, name ASC LIMIT ?'
+  params.push(limit)
+
+  const rows = await db.prepare(sql).bind(...params).all()
+
+  // categorias disponíveis (para filtros)
+  const cats = await db.prepare('SELECT DISTINCT category FROM public_apis ORDER BY category').all()
+
+  return c.json({
+    total: rows.results?.length ?? 0,
+    categories: cats.results?.map((r: any) => r.category) ?? [],
+    apis: rows.results ?? []
+  })
+})
+
+// ── POST /api/public-apis ─────────────────────────────────────────────────
+// Adiciona nova API ao catálogo
+app.post('/api/public-apis', async (c) => {
+  const db = c.env.DB
+  if (!db) return c.json({ error: 'DB não disponível' }, 503)
+
+  const { name, category, description, base_url, docs_url, auth_type, example, tags, quality } =
+    await c.req.json() as {
+      name: string; category: string; description?: string; base_url?: string
+      docs_url?: string; auth_type?: string; example?: string; tags?: string; quality?: number
+    }
+
+  if (!name || !category) return c.json({ error: 'name e category são obrigatórios' }, 400)
+
+  const result = await db.prepare(
+    `INSERT INTO public_apis (name,category,description,base_url,docs_url,auth_type,example,tags,quality)
+     VALUES (?,?,?,?,?,?,?,?,?)`
+  ).bind(
+    name, category,
+    description ?? '',
+    base_url    ?? '',
+    docs_url    ?? '',
+    auth_type   ?? 'none',
+    example     ?? '',
+    tags        ?? '',
+    quality     ?? 8
+  ).run()
+
+  return c.json({ success: true, id: result.meta?.last_row_id })
+})
+
+// ── POST /api/cache-query ─────────────────────────────────────────────────
+// Cache-first: hash da query → busca D1 → IA → salva resultado
+app.post('/api/cache-query', async (c) => {
+  const db = c.env.DB
+  if (!db) return c.json({ error: 'DB não disponível' }, 503)
+
+  const { query, agent_id, model, ttl_hours } = await c.req.json() as {
+    query: string; agent_id?: string; model?: string; ttl_hours?: number
+  }
+  if (!query) return c.json({ error: 'query é obrigatória' }, 400)
+
+  const hash = await sha256(query)
+  const now  = new Date().toISOString()
+
+  // 1. Verificar cache
+  const cached = await db.prepare(
+    `SELECT * FROM query_cache WHERE query_hash=? AND (expires_at IS NULL OR expires_at > ?)`
+  ).bind(hash, now).first() as any
+
+  if (cached) {
+    // Incrementar hit_count
+    await db.prepare(`UPDATE query_cache SET hit_count=hit_count+1 WHERE id=?`)
+                .bind(cached.id).run()
+    return c.json({
+      source: 'cache',
+      hit_count: (cached.hit_count ?? 0) + 1,
+      tokens_saved: cached.tokens_saved ?? 0,
+      agent_id: cached.agent_id ?? null,
+      response: cached.response,
+      cached_at: cached.created_at
+    })
+  }
+
+  // 2. Cache miss — chamar IA
+  const agentObj = agent_id ? AGENTS.find(a => a.id === agent_id) : null
+  const aiModel  = model ?? agentObj?.model ?? CF_MODELS.llama
+  const system   = agentObj?.system ?? 'Você é um assistente útil e preciso.'
+
+  let response = ''
+  try {
+    response = await callCFAI(c.env.AI, aiModel, system, query, 1500)
+  } catch (e: any) {
+    return c.json({ error: `Erro ao chamar IA: ${e?.message ?? e}` }, 500)
+  }
+
+  // 3. Estimar tokens economizados (aprox: chars/4)
+  const tokensEst = Math.ceil(query.length / 4) + Math.ceil(response.length / 4)
+  const expiresAt = ttl_hours
+    ? new Date(Date.now() + ttl_hours * 3600 * 1000).toISOString()
+    : null
+
+  await db.prepare(
+    `INSERT INTO query_cache (query_hash,query_text,response,source,agent_id,tokens_saved,expires_at)
+     VALUES (?,?,?,?,?,?,?)`
+  ).bind(hash, query, response, 'cloudflare-ai', agent_id ?? null, tokensEst, expiresAt).run()
+
+  return c.json({
+    source: 'ai',
+    hit_count: 0,
+    tokens_saved: 0,
+    agent_id: agent_id ?? null,
+    response,
+    model: aiModel
+  })
+})
+
+// ── GET /api/cache/stats ──────────────────────────────────────────────────
+app.get('/api/cache/stats', async (c) => {
+  const db = c.env.DB
+  if (!db) return c.json({ error: 'DB não disponível' }, 503)
+
+  const total     = await db.prepare('SELECT COUNT(*) as n FROM query_cache').first() as any
+  const hits      = await db.prepare('SELECT SUM(hit_count) as n FROM query_cache').first() as any
+  const saved     = await db.prepare('SELECT SUM(tokens_saved) as n FROM query_cache').first() as any
+  const byAgent   = await db.prepare(
+    `SELECT agent_id, COUNT(*) as entries, SUM(hit_count) as hits
+     FROM query_cache WHERE agent_id IS NOT NULL GROUP BY agent_id ORDER BY hits DESC`
+  ).all()
+
+  return c.json({
+    total_entries:  total?.n  ?? 0,
+    total_hits:     hits?.n   ?? 0,
+    tokens_saved:   saved?.n  ?? 0,
+    by_agent: byAgent.results ?? []
+  })
+})
+
+// ── DELETE /api/cache ─────────────────────────────────────────────────────
+// Limpa entradas expiradas (ou todas se ?all=1)
+app.delete('/api/cache', async (c) => {
+  const db  = c.env.DB
+  if (!db) return c.json({ error: 'DB não disponível' }, 503)
+  const all = c.req.query('all') === '1'
+
+  if (all) {
+    const r = await db.prepare('DELETE FROM query_cache').run()
+    return c.json({ deleted: r.meta?.changes ?? 0, scope: 'all' })
+  }
+
+  const now = new Date().toISOString()
+  const r   = await db.prepare('DELETE FROM query_cache WHERE expires_at IS NOT NULL AND expires_at < ?')
+                      .bind(now).run()
+  return c.json({ deleted: r.meta?.changes ?? 0, scope: 'expired' })
+})
+
+// ── GET /api/knowledge ────────────────────────────────────────────────────
+// Lista conhecimento acumulado. Suporta ?agent_id=&category=&q=&limit=
+app.get('/api/knowledge', async (c) => {
+  const db = c.env.DB
+  if (!db) return c.json({ error: 'DB não disponível' }, 503)
+
+  const agent_id = c.req.query('agent_id') || ''
+  const category = c.req.query('category') || ''
+  const q        = c.req.query('q')        || ''
+  const limit    = Math.min(parseInt(c.req.query('limit') || '50'), 500)
+
+  let sql  = 'SELECT * FROM knowledge WHERE 1=1'
+  const params: (string | number)[] = []
+
+  if (agent_id) { sql += ' AND agent_id = ?';              params.push(agent_id) }
+  if (category) { sql += ' AND category = ?';              params.push(category) }
+  if (q)        { sql += ' AND (topic LIKE ? OR content LIKE ? OR keywords LIKE ?)';
+                  params.push(`%${q}%`, `%${q}%`, `%${q}%`) }
+
+  sql += ' ORDER BY confidence DESC, used_count DESC, created_at DESC LIMIT ?'
+  params.push(limit)
+
+  const rows = await db.prepare(sql).bind(...params).all()
+  const total = await db.prepare('SELECT COUNT(*) as n FROM knowledge').first() as any
+
+  return c.json({
+    total: total?.n ?? 0,
+    returned: rows.results?.length ?? 0,
+    knowledge: rows.results ?? []
+  })
+})
+
+// ── POST /api/knowledge/add ───────────────────────────────────────────────
+// Agente aprende novo conhecimento (manual ou via IA)
+app.post('/api/knowledge/add', async (c) => {
+  const db = c.env.DB
+  if (!db) return c.json({ error: 'DB não disponível' }, 503)
+
+  const { agent_id, topic, category, content, source_url, source_type, confidence, keywords } =
+    await c.req.json() as {
+      agent_id: string; topic: string; category: string; content: string
+      source_url?: string; source_type?: string; confidence?: number; keywords?: string
+    }
+
+  if (!agent_id || !topic || !category || !content)
+    return c.json({ error: 'agent_id, topic, category e content são obrigatórios' }, 400)
+
+  // Verificar se agente existe
+  const agent = AGENTS.find(a => a.id === agent_id)
+  if (!agent) return c.json({ error: 'Agente não encontrado' }, 404)
+
+  const result = await db.prepare(
+    `INSERT INTO knowledge (agent_id,topic,category,content,source_url,source_type,confidence,keywords)
+     VALUES (?,?,?,?,?,?,?,?)`
+  ).bind(
+    agent_id, topic, category, content,
+    source_url  ?? '',
+    source_type ?? 'manual',
+    confidence  ?? 0.9,
+    keywords    ?? ''
+  ).run()
+
+  return c.json({ success: true, id: result.meta?.last_row_id, agent_id, topic })
+})
+
+// ── POST /api/knowledge/learn ─────────────────────────────────────────────
+// Agente aprende automaticamente via IA sobre um tópico
+app.post('/api/knowledge/learn', async (c) => {
+  const db = c.env.DB
+  if (!db) return c.json({ error: 'DB não disponível' }, 503)
+
+  const { agent_id, topic, category } = await c.req.json() as {
+    agent_id: string; topic: string; category?: string
+  }
+  if (!agent_id || !topic) return c.json({ error: 'agent_id e topic são obrigatórios' }, 400)
+
+  const agent = AGENTS.find(a => a.id === agent_id)
+  if (!agent) return c.json({ error: 'Agente não encontrado' }, 404)
+
+  const prompt = `Você é ${agent.emoji} ${agent.name}. Aprenda sobre o tópico "${topic}" e explique de forma clara e objetiva em português, com foco prático. Máximo 300 palavras.`
+
+  let content = ''
+  try {
+    content = await callCFAI(c.env.AI, agent.model, agent.system, prompt, 800)
+  } catch (e: any) {
+    return c.json({ error: `Erro ao chamar IA: ${e?.message ?? e}` }, 500)
+  }
+
+  // Extrair keywords simples (palavras com >4 chars, deduplicadas)
+  const words = content.match(/\b\w{5,}\b/g) ?? []
+  const freq: Record<string,number> = {}
+  for (const w of words) { const k = w.toLowerCase(); freq[k] = (freq[k]||0)+1 }
+  const keywords = Object.entries(freq).sort((a,b)=>b[1]-a[1]).slice(0,10).map(e=>e[0]).join(',')
+
+  const result = await db.prepare(
+    `INSERT INTO knowledge (agent_id,topic,category,content,source_type,confidence,keywords)
+     VALUES (?,?,?,?,?,?,?)`
+  ).bind(
+    agent_id, topic, category ?? agent.category, content,
+    'ai', 0.85, keywords
+  ).run()
+
+  return c.json({
+    success: true,
+    id: result.meta?.last_row_id,
+    agent_id,
+    topic,
+    content,
+    keywords
+  })
+})
+
+// ── POST /api/knowledge/clone ─────────────────────────────────────────────
+// Clona conhecimento de um agente para outro (expansão de bots)
+app.post('/api/knowledge/clone', async (c) => {
+  const db = c.env.DB
+  if (!db) return c.json({ error: 'DB não disponível' }, 503)
+
+  const { from_agent_id, to_agent_id, category, limit } = await c.req.json() as {
+    from_agent_id: string; to_agent_id: string; category?: string; limit?: number
+  }
+  if (!from_agent_id || !to_agent_id)
+    return c.json({ error: 'from_agent_id e to_agent_id são obrigatórios' }, 400)
+
+  const toAgent = AGENTS.find(a => a.id === to_agent_id)
+  if (!toAgent) return c.json({ error: 'Agente destino não encontrado' }, 404)
+
+  // Buscar conhecimento do agente origem
+  let sql = `SELECT * FROM knowledge WHERE agent_id=?`
+  const params: (string | number)[] = [from_agent_id]
+  if (category) { sql += ' AND category=?'; params.push(category) }
+  sql += ` ORDER BY confidence DESC, used_count DESC LIMIT ?`
+  params.push(Math.min(limit ?? 20, 100))
+
+  const rows = await db.prepare(sql).bind(...params).all()
+  const items = (rows.results ?? []) as any[]
+
+  if (items.length === 0) return c.json({ cloned: 0, message: 'Nenhum conhecimento encontrado para clonar' })
+
+  // Inserir cópias para o agente destino (ignora duplicatas por topic+agent)
+  let cloned = 0
+  for (const item of items) {
+    try {
+      await db.prepare(
+        `INSERT OR IGNORE INTO knowledge (agent_id,topic,category,content,source_url,source_type,confidence,keywords)
+         SELECT ?,topic,category,content,source_url,'cloned',confidence*0.95,keywords FROM knowledge WHERE id=?`
+      ).bind(to_agent_id, item.id).run()
+      cloned++
+    } catch { /* ignora conflitos */ }
+  }
+
+  return c.json({
+    success: true,
+    from_agent_id,
+    to_agent_id,
+    cloned,
+    total_available: items.length
+  })
+})
+
+// ── GET /api/knowledge/stats ──────────────────────────────────────────────
+app.get('/api/knowledge/stats', async (c) => {
+  const db = c.env.DB
+  if (!db) return c.json({ error: 'DB não disponível' }, 503)
+
+  const total    = await db.prepare('SELECT COUNT(*) as n FROM knowledge').first() as any
+  const byAgent  = await db.prepare(
+    `SELECT agent_id, COUNT(*) as entries, AVG(confidence) as avg_confidence, SUM(used_count) as total_uses
+     FROM knowledge GROUP BY agent_id ORDER BY entries DESC`
+  ).all()
+  const bySource = await db.prepare(
+    `SELECT source_type, COUNT(*) as n FROM knowledge GROUP BY source_type`
+  ).all()
+
+  return c.json({
+    total: total?.n ?? 0,
+    by_agent:  byAgent.results  ?? [],
+    by_source: bySource.results ?? []
   })
 })
 
