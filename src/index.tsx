@@ -574,8 +574,50 @@ async function callCFAI(
     { role: 'system', content: system },
     { role: 'user',   content: userMsg }
   ]
-  const resp = await (ai as any).run(model, { messages, max_tokens: maxTokens })
-  if (resp && typeof resp === 'object' && 'response' in resp) return (resp as any).response || ''
+  const resp = await (ai as any).run(model, { messages, max_tokens: maxTokens, stream: false })
+
+  // Objeto simples com campo response (padrão da maioria dos modelos)
+  if (resp && typeof resp === 'object' && !('getReader' in resp) && !('pipeTo' in resp)) {
+    if ('response' in resp && typeof (resp as any).response === 'string') {
+      return (resp as any).response || ''
+    }
+    // Kimi K2.6 / modelos que retornam { result: { response: '...' } }
+    if ('result' in resp && typeof (resp as any).result === 'object') {
+      const r = (resp as any).result
+      if (r && 'response' in r) return String(r.response || '')
+    }
+    // Fallback: serializar para detectar estrutura desconhecida
+    try {
+      const str = JSON.stringify(resp)
+      // Extrair primeiro valor string longo
+      const match = str.match(/"([^"]{10,})"/)
+      if (match) return match[1]
+    } catch { /* ignore */ }
+  }
+
+  // ReadableStream — consumir e agregar tokens SSE
+  if (resp && typeof resp === 'object' && ('getReader' in resp || 'pipeTo' in resp)) {
+    const reader = (resp as ReadableStream<Uint8Array>).getReader()
+    const decoder = new TextDecoder()
+    let full = ''
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      const chunk = decoder.decode(value, { stream: true })
+      // SSE: "data: {...}\n\n"
+      for (const line of chunk.split('\n')) {
+        if (!line.startsWith('data:')) continue
+        const data = line.slice(5).trim()
+        if (data === '[DONE]') continue
+        try {
+          const obj = JSON.parse(data)
+          full += obj?.response ?? obj?.token ?? ''
+        } catch { full += data }
+      }
+    }
+    return full
+  }
+
   return String(resp || '')
 }
 
@@ -651,27 +693,57 @@ const AUTH_USERS: Record<string, string> = {
 }
 const SESSION_COOKIE = 'st_sess'
 const SESSION_TTL    = 60 * 60 * 8   // 8 horas em segundos
+// Segredo para assinar tokens — fixo no código (sem KV necessário)
+const TOKEN_SECRET   = 'SixTechMAS_JWT_S3cr3t_2025_x9kLmP'
 
-// Gera token de sessão aleatório (Web Crypto — disponível no CF Workers)
-function genToken(): string {
-  const arr = new Uint8Array(24)
-  crypto.getRandomValues(arr)
-  return Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('')
+// ── Assinatura HMAC-SHA256 (Web Crypto API — disponível no CF Workers) ────────
+async function hmacSign(data: string): Promise<string> {
+  const enc  = new TextEncoder()
+  const key  = await crypto.subtle.importKey(
+    'raw', enc.encode(TOKEN_SECRET),
+    { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+  )
+  const sig  = await crypto.subtle.sign('HMAC', key, enc.encode(data))
+  return btoa(String.fromCharCode(...new Uint8Array(sig)))
+    .replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'')
 }
 
-// Sessões em memória (válidas enquanto o worker está ativo)
-const SESSIONS = new Map<string, { user: string; exp: number }>()
+async function hmacVerify(data: string, sig: string): Promise<boolean> {
+  const expected = await hmacSign(data)
+  return expected === sig
+}
 
-// Verifica se a request tem sessão válida
-function getSession(c: any): { user: string } | null {
+// ── Gerar token stateless: base64(payload).HMAC ───────────────────────────────
+async function createToken(user: string): Promise<string> {
+  const payload = btoa(JSON.stringify({ u: user, exp: Math.floor(Date.now()/1000) + SESSION_TTL }))
+    .replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'')
+  const sig = await hmacSign(payload)
+  return `${payload}.${sig}`
+}
+
+// ── Verificar e decodificar token ─────────────────────────────────────────────
+async function verifyToken(token: string): Promise<{ user: string } | null> {
+  try {
+    const [payload, sig] = token.split('.')
+    if (!payload || !sig) return null
+    const valid = await hmacVerify(payload, sig)
+    if (!valid) return null
+    // Decodificar payload
+    const padded = payload.replace(/-/g,'+').replace(/_/g,'/')
+    const json   = JSON.parse(atob(padded + '==='.slice((padded.length % 4) || 4)))
+    if (Math.floor(Date.now()/1000) > json.exp) return null
+    return { user: json.u }
+  } catch {
+    return null
+  }
+}
+
+// ── Extrair token do cookie ───────────────────────────────────────────────────
+async function getSession(c: any): Promise<{ user: string } | null> {
   const cookieHeader = c.req.header('cookie') || ''
   const match = cookieHeader.match(new RegExp(`(?:^|;\\s*)${SESSION_COOKIE}=([^;]+)`))
   if (!match) return null
-  const token = match[1]
-  const sess = SESSIONS.get(token)
-  if (!sess) return null
-  if (Date.now() / 1000 > sess.exp) { SESSIONS.delete(token); return null }
-  return { user: sess.user }
+  return verifyToken(match[1])
 }
 
 // ─── HONO APP ─────────────────────────────────────────────────────────────────
@@ -688,8 +760,7 @@ app.post('/api/login', async (c) => {
   if (!expected || expected !== password) {
     return c.json({ ok: false, error: 'Usuário ou senha incorretos' }, 401)
   }
-  const token = genToken()
-  SESSIONS.set(token, { user: username.trim(), exp: Math.floor(Date.now() / 1000) + SESSION_TTL })
+  const token = await createToken(username.trim())
   const cookieVal = `${SESSION_COOKIE}=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${SESSION_TTL}`
   return new Response(JSON.stringify({ ok: true, user: username.trim() }), {
     status: 200,
@@ -703,9 +774,6 @@ app.post('/api/login', async (c) => {
 
 // ── POST /api/logout ──────────────────────────────────────────────────────────
 app.post('/api/logout', (c) => {
-  const cookieHeader = c.req.header('cookie') || ''
-  const match = cookieHeader.match(new RegExp(`(?:^|;\\s*)${SESSION_COOKIE}=([^;]+)`))
-  if (match) SESSIONS.delete(match[1])
   return new Response(JSON.stringify({ ok: true }), {
     status: 200,
     headers: {
@@ -716,17 +784,19 @@ app.post('/api/logout', (c) => {
 })
 
 // ── GET /api/me — checa sessão ────────────────────────────────────────────────
-app.get('/api/me', (c) => {
-  const sess = getSession(c)
+app.get('/api/me', async (c) => {
+  const sess = await getSession(c)
   if (!sess) return c.json({ ok: false }, 401)
   return c.json({ ok: true, user: sess.user })
 })
 
-// ── Middleware: protege todas as rotas /api/* (exceto /api/login e /api/me) ───
+// ── Middleware: protege rotas /api/* que precisam de auth ─────────────────────
+// Rotas PÚBLICAS (sem login): login, me, logout, status, models
+const PUBLIC_API = ['/api/login', '/api/me', '/api/logout', '/api/status', '/api/models']
 app.use('/api/*', async (c, next) => {
   const path = new URL(c.req.url).pathname
-  if (path === '/api/login' || path === '/api/me' || path === '/api/logout') return next()
-  const sess = getSession(c)
+  if (PUBLIC_API.includes(path)) return next()
+  const sess = await getSession(c)
   if (!sess) return c.json({ error: 'Não autorizado', code: 401 }, 401)
   return next()
 })
@@ -815,7 +885,7 @@ app.post('/api/pipeline', async (c) => {
 // ── POST /api/document/generate ───────────────────────────────────────────
 // Gera um documento completo via IA (contrato, NDA, relatório, etc.)
 app.post('/api/document/generate', async (c) => {
-  const sess = getSession(c)
+  const sess = await getSession(c)
   if (!sess) return c.json({ error: 'Não autorizado' }, 401)
 
   const { agentId, docType, instructions, context } = await c.req.json() as {
@@ -863,7 +933,7 @@ REGRAS OBRIGATÓRIAS:
 // ── POST /api/document/analyze ────────────────────────────────────────────
 // Analisa texto de documento enviado pelo usuário (conteúdo extraído no frontend)
 app.post('/api/document/analyze', async (c) => {
-  const sess = getSession(c)
+  const sess = await getSession(c)
   if (!sess) return c.json({ error: 'Não autorizado' }, 401)
 
   const { agentId, fileContent, fileName, instruction } = await c.req.json() as {
